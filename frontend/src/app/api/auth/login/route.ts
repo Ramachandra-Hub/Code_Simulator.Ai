@@ -40,8 +40,9 @@ export async function POST(req: Request) {
     if (isPrismaConnectionError(err)) {
       return NextResponse.json(
         {
-          error:
-            "Cannot connect to database. Check DATABASE_URL in .env, run npm run db:setup-supabase, then npm run db:seed",
+          error: process.env.VERCEL
+            ? "Cannot connect to database on Vercel. Verify DATABASE_URL uses the Supabase pooler (port 6543) and DIRECT_URL uses port 5432, then redeploy."
+            : "Cannot connect to database. Check DATABASE_URL in .env, run npm run db:setup-supabase, then npm run db:seed",
         },
         { status: 503 }
       );

@@ -4,12 +4,15 @@ export function getDatabaseConfigError(): string | null {
   const direct = process.env.DIRECT_URL || "";
 
   if (!url || !direct) {
+    if (process.env.VERCEL) {
+      return "Database not configured on Vercel. Add DATABASE_URL and DIRECT_URL under Project Settings → Environment Variables, then redeploy.";
+    }
     return "Database not configured. Set DATABASE_URL and DIRECT_URL in .env";
   }
 
   const placeholder = /postgres:(YOUR_DB_PASSWORD|\[YOUR_PASSWORD\])@/;
   if (placeholder.test(url) || placeholder.test(direct)) {
-    return "Supabase database password not set. In .env replace YOUR_DB_PASSWORD with your password from Supabase → Settings → Database";
+    return "Supabase database password not set. Replace [YOUR_PASSWORD] with your password from Supabase → Settings → Database";
   }
 
   return null;
@@ -20,9 +23,13 @@ export function isPrismaConnectionError(err: unknown): boolean {
   return (
     msg.includes("Can't reach database") ||
     msg.includes("Authentication failed") ||
+    msg.includes("Database not configured") ||
+    msg.includes("PrismaClientConstructorValidationError") ||
     msg.includes("P1001") ||
     msg.includes("P1000") ||
+    msg.includes("P1017") ||
     msg.includes("ECONNREFUSED") ||
-    msg.includes("ENOTFOUND")
+    msg.includes("ENOTFOUND") ||
+    msg.includes("ETIMEDOUT")
   );
 }

@@ -11,7 +11,8 @@ export const databaseProvider = process.env.DATABASE_PROVIDER || "local";
 function withConnectionLimit(url: string | undefined): string | undefined {
   if (!url || url.includes("connection_limit=")) return url;
   const sep = url.includes("?") ? "&" : "?";
-  return `${url}${sep}connection_limit=5`;
+  const limit = process.env.VERCEL ? "1" : "5";
+  return `${url}${sep}connection_limit=${limit}`;
 }
 
 function resolveDatabaseUrl(): string {
