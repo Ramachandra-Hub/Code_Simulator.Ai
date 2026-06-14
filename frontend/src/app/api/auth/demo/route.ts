@@ -34,7 +34,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error: process.env.VERCEL
-            ? "Cannot connect to database on Vercel. Verify DATABASE_URL uses the Supabase pooler (port 6543) and DIRECT_URL uses port 5432, then redeploy."
+            ? "Cannot connect to database on Vercel. Use DATABASE_URL with db.*.supabase.co:5432 (copy from Supabase Dashboard), or the pooler host aws-0-REGION.pooler.supabase.com:6543 — not port 6543 on db.*.supabase.co."
             : "Cannot connect to database. Check DATABASE_URL in .env, run npm run db:setup-supabase, then npm run db:seed",
         },
         { status: 503 }

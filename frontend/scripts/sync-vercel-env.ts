@@ -60,12 +60,12 @@ function parseEnv(content: string): Record<string, string> {
 }
 
 function toSupabasePoolerUrl(url: string): string {
-  if (!url.includes("supabase.co") || !url.includes(":5432")) return url;
-  let pooled = url.replace(":5432/", ":6543/");
-  if (!pooled.includes("pgbouncer=true")) {
-    pooled += pooled.includes("?") ? "&pgbouncer=true" : "?pgbouncer=true";
+  // Only rewrite official pooler hosts. db.*.supabase.co does NOT serve port 6543.
+  if (!url.includes("pooler.supabase.com")) return url;
+  if (!url.includes("pgbouncer=true") && url.includes(":6543")) {
+    return url + (url.includes("?") ? "&pgbouncer=true" : "?pgbouncer=true");
   }
-  return pooled;
+  return url;
 }
 
 function applyVercelOverrides(vars: Record<string, string>): Record<string, string> {
