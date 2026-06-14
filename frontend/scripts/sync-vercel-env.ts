@@ -59,8 +59,28 @@ function parseEnv(content: string): Record<string, string> {
   return vars;
 }
 
+function toVercelSupabaseUrls(vars: Record<string, string>): Record<string, string> {
+  const ref = vars.SUPABASE_PROJECT_REF;
+  const region = vars.SUPABASE_POOLER_REGION || vars.AWS_REGION || "";
+  const direct = vars.DIRECT_URL || vars.DATABASE_URL || "";
+  if (!ref || !direct.includes("supabase.co") || direct.includes("pooler.supabase.com")) {
+    return vars;
+  }
+
+  const match = direct.match(/postgresql:\/\/postgres:([^@]+)@/);
+  const password = match?.[1];
+  if (!password || !region) return vars;
+
+  const poolerHost = `aws-0-${region}.pooler.supabase.com`;
+  const user = `postgres.${ref}`;
+  return {
+    ...vars,
+    DATABASE_URL: `postgresql://${user}:${password}@${poolerHost}:6543/postgres?pgbouncer=true&sslmode=require`,
+    DIRECT_URL: `postgresql://${user}:${password}@${poolerHost}:5432/postgres?sslmode=require`,
+  };
+}
+
 function toSupabasePoolerUrl(url: string): string {
-  // Only rewrite official pooler hosts. db.*.supabase.co does NOT serve port 6543.
   if (!url.includes("pooler.supabase.com")) return url;
   if (!url.includes("pgbouncer=true") && url.includes(":6543")) {
     return url + (url.includes("?") ? "&pgbouncer=true" : "?pgbouncer=true");
@@ -74,11 +94,12 @@ function applyVercelOverrides(vars: Record<string, string>): Record<string, stri
   out.NEXTAUTH_URL = PROD_URL;
   out.ALLOW_DEMO_USERS = "true";
   out.JUDGE0_REQUIRE = "false";
-  if (out.DATABASE_URL) {
-    out.DATABASE_URL = toSupabasePoolerUrl(out.DATABASE_URL);
+  const withPooler = toVercelSupabaseUrls(out);
+  if (withPooler.DATABASE_URL) {
+    withPooler.DATABASE_URL = toSupabasePoolerUrl(withPooler.DATABASE_URL);
   }
-  delete out.NEXT_PUBLIC_API_URL;
-  return out;
+  delete withPooler.NEXT_PUBLIC_API_URL;
+  return withPooler;
 }
 
 function runVercel(args: string[]): boolean {

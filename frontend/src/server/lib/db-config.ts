@@ -10,6 +10,10 @@ export function getDatabaseConfigError(): string | null {
     return "Database not configured. Set DATABASE_URL and DIRECT_URL in .env";
   }
 
+  if (process.env.VERCEL && url.includes("db.") && url.includes(".supabase.co") && !url.includes("pooler.supabase.com")) {
+    return "DATABASE_URL uses db.*.supabase.co which is IPv6-only. Vercel needs the Supabase pooler URL (pooler.supabase.com) from Dashboard → Connect → Transaction pooler.";
+  }
+
   const placeholder = /postgres:(YOUR_DB_PASSWORD|\[YOUR_PASSWORD\])@/;
   if (placeholder.test(url) || placeholder.test(direct)) {
     return "Supabase database password not set. Replace [YOUR_PASSWORD] with your password from Supabase → Settings → Database";
