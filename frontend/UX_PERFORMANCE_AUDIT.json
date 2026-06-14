@@ -1,0 +1,99 @@
+{
+  "generatedAt": "2026-06-13T18:02:26.413Z",
+  "findings": [
+    {
+      "area": "Bundle size",
+      "severity": "high",
+      "issue": "monaco-editor loaded in client bundle",
+      "impact": "Increases JS payload and compile time on coding/interview routes",
+      "recommendation": "Keep Monaco dynamic-import only on /coding routes; never in interview shell"
+    },
+    {
+      "area": "Bundle size",
+      "severity": "high",
+      "issue": "@monaco-editor/react loaded in client bundle",
+      "impact": "Increases JS payload and compile time on coding/interview routes",
+      "recommendation": "Keep Monaco dynamic-import only on /coding routes; never in interview shell"
+    },
+    {
+      "area": "API latency",
+      "severity": "high",
+      "issue": "submitAnswer blocks on full LLM evaluation before response",
+      "impact": "Voice/panel submit feels frozen during processing phase",
+      "recommendation": "Split into fast ack (200ms) + background evaluation websocket/poll"
+    },
+    {
+      "area": "Page load",
+      "severity": "high",
+      "issue": "/api/health responded in 4581ms",
+      "impact": "Fails <3s page load target",
+      "metric": "4581ms",
+      "recommendation": "Investigate cold start / DB connection pool"
+    },
+    {
+      "area": "API latency",
+      "severity": "high",
+      "issue": "/api/system/status responded in 3465ms",
+      "impact": "Blocks SystemStatusBanner on every dashboard page",
+      "metric": "3465ms",
+      "recommendation": "Cache status 60s client-side; load banner after paint"
+    },
+    {
+      "area": "Bundle size",
+      "severity": "medium",
+      "issue": "framer-motion loaded in client bundle",
+      "impact": "Increases JS payload and compile time on coding/interview routes",
+      "recommendation": "Lazy-load framer-motion in sidebar; use CSS transitions where possible"
+    },
+    {
+      "area": "Bundle size",
+      "severity": "medium",
+      "issue": "recharts loaded in client bundle",
+      "impact": "Increases JS payload and compile time on coding/interview routes",
+      "recommendation": "Lazy-load framer-motion in sidebar; use CSS transitions where possible"
+    },
+    {
+      "area": "Supabase queries",
+      "severity": "medium",
+      "issue": "Deep Prisma includes on panel submit (turns + panelMembers + resume)",
+      "impact": "200–800ms DB round-trips per interview turn",
+      "recommendation": "Select only fields needed for turn; paginate turns; index sessionId+timestamp"
+    },
+    {
+      "area": "API latency",
+      "severity": "medium",
+      "issue": "Redis unavailable in dev (persistence: unavailable)",
+      "impact": "Session cache and rate limits bypassed; repeated cold DB hits",
+      "recommendation": "Enable Redis for session cache; cache panel session state between turns"
+    },
+    {
+      "area": "Page load",
+      "severity": "medium",
+      "issue": "Dashboard shell fires session fetch + onboarding + feedback widget on every page",
+      "impact": "3–5 parallel API calls before feature content renders",
+      "metric": "Observed GET /api/auth/me ~350–2300ms, /api/user/onboarding ~200–2500ms",
+      "recommendation": "Defer non-critical widgets; SWR cache session; skeleton-first render"
+    },
+    {
+      "area": "API latency",
+      "severity": "medium",
+      "issue": "React Strict Mode double-mounts panel/voice init in dev",
+      "impact": "Duplicate POST /api/panel/start calls",
+      "recommendation": "Use initRef guard (implemented in panel); extend to all session inits"
+    },
+    {
+      "area": "Bundle size",
+      "severity": "medium",
+      "issue": ".next build cache present — run `next build` for accurate route sizes",
+      "impact": "Cannot measure production bundle without build",
+      "recommendation": "Add `npm run analyze` with @next/bundle-analyzer"
+    },
+    {
+      "area": "Interview UX",
+      "severity": "low",
+      "issue": "WHISPER_URL and XTTS_URL default to localhost — offline in most dev setups",
+      "impact": "Falls back to browser STT/TTS (acceptable) but adds confusion",
+      "recommendation": "Show capability banner once; pre-warm browser voices on interview entry"
+    }
+  ]
+}

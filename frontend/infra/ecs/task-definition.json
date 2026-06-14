@@ -1,0 +1,49 @@
+{
+  "family": "nexusedge-app",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "1024",
+  "memory": "2048",
+  "executionRoleArn": "arn:aws:iam::ACCOUNT_ID:role/nexusedge-ecs-execution",
+  "taskRoleArn": "arn:aws:iam::ACCOUNT_ID:role/nexusedge-ecs-task",
+  "containerDefinitions": [
+    {
+      "name": "nexusedge-app",
+      "image": "ACCOUNT_ID.dkr.ecr.ap-south-1.amazonaws.com/nexusedge:latest",
+      "essential": true,
+      "portMappings": [{ "containerPort": 3000, "protocol": "tcp" }],
+      "environment": [
+        { "name": "NODE_ENV", "value": "production" },
+        { "name": "MODEL_PROVIDER", "value": "ollama" },
+        { "name": "JUDGE0_REQUIRE", "value": "true" },
+        { "name": "AGENT_CACHE_ENABLED", "value": "true" }
+      ],
+      "secrets": [
+        { "name": "DATABASE_URL", "valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:nexusedge/database-url" },
+        { "name": "DIRECT_URL", "valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:nexusedge/direct-url" },
+        { "name": "JWT_SECRET", "valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:nexusedge/jwt-secret" },
+        { "name": "NEXTAUTH_SECRET", "valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:nexusedge/nextauth-secret" },
+        { "name": "REDIS_URL", "valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:nexusedge/redis-url" },
+        { "name": "QDRANT_URL", "valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:nexusedge/qdrant-url" },
+        { "name": "JUDGE0_URL", "valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:nexusedge/judge0-url" },
+        { "name": "JUDGE0_API_KEY", "valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:nexusedge/judge0-api-key" },
+        { "name": "OLLAMA_BASE_URL", "valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:nexusedge/ollama-url" }
+      ],
+      "healthCheck": {
+        "command": ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health/live || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/nexusedge",
+          "awslogs-region": "ap-south-1",
+          "awslogs-stream-prefix": "app"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,105 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: nexusedge-postgres
+    environment:
+      POSTGRES_USER: nexusedge
+      POSTGRES_PASSWORD: nexusedge_secret
+      POSTGRES_DB: nexusedge
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexusedge"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: nexusedge-redis
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  qdrant:
+    image: qdrant/qdrant:v1.13.2
+    container_name: nexusedge-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:6333/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: nexusedge-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: nexusedge-app
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_PROVIDER: local
+      DATABASE_URL: postgresql://nexusedge:nexusedge_secret@postgres:5432/nexusedge
+      DIRECT_URL: postgresql://nexusedge:nexusedge_secret@postgres:5432/nexusedge
+      REDIS_URL: redis://redis:6379
+      QDRANT_URL: http://qdrant:6333
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: nexusedge-dev-secret-change-in-production
+      JWT_SECRET: nexusedge-jwt-secret-change-in-production
+      MODEL_PROVIDER: ollama
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: qwen3:8b
+      OLLAMA_MODEL_REASONING: deepseek-r1:8b
+      OLLAMA_TIMEOUT_MS: 120000
+      OLLAMA_MAX_RETRIES: 3
+      OLLAMA_EMBED_MODEL: nomic-embed-text
+      JUDGE0_URL: http://host.docker.internal:2358
+      JUDGE0_REQUIRE: "false"
+      AGENT_CACHE_ENABLED: "true"
+      NEXT_PUBLIC_API_URL: http://localhost:3000/api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
+  qdrant_data:
+  ollama_data:
