@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { getDatabaseConfigError } from "../../lib/db-config";
 
 type ExtendedPrismaClient = ReturnType<typeof createPrismaClient>;
 
@@ -13,13 +14,21 @@ function withConnectionLimit(url: string | undefined): string | undefined {
   return `${url}${sep}connection_limit=5`;
 }
 
+function resolveDatabaseUrl(): string {
+  const configError = getDatabaseConfigError();
+  if (configError) {
+    throw new Error(configError);
+  }
+  return withConnectionLimit(process.env.DATABASE_URL)!;
+}
+
 const METRIC_MODELS = new Set(["PerformanceMetric", "SystemError"]);
 
 function createPrismaClient() {
   const base = new PrismaClient({
     log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
     datasources: {
-      db: { url: withConnectionLimit(process.env.DATABASE_URL) },
+      db: { url: resolveDatabaseUrl() },
     },
   });
 
