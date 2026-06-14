@@ -32,6 +32,8 @@ export function isPrismaConnectionError(err: unknown): boolean {
     msg.includes("P1001") ||
     msg.includes("P1000") ||
     msg.includes("P1017") ||
+    msg.includes("connection pool") ||
+    msg.includes("pool timeout") ||
     msg.includes("ECONNREFUSED") ||
     msg.includes("ENOTFOUND") ||
     msg.includes("ETIMEDOUT")

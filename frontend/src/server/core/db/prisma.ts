@@ -8,11 +8,34 @@ const globalForPrisma = globalThis as unknown as { prisma: ExtendedPrismaClient 
 /** Active backend: supabase (testing) | local | aws-rds — set via DATABASE_PROVIDER in .env */
 export const databaseProvider = process.env.DATABASE_PROVIDER || "local";
 
-function withConnectionLimit(url: string | undefined): string | undefined {
-  if (!url || url.includes("connection_limit=")) return url;
-  const sep = url.includes("?") ? "&" : "?";
-  const limit = process.env.VERCEL ? "1" : "5";
-  return `${url}${sep}connection_limit=${limit}`;
+function appendPoolParams(url: string | undefined): string | undefined {
+  if (!url) return url;
+
+  const isVercel = Boolean(process.env.VERCEL);
+  const isTransactionPooler = url.includes(":6543") || url.includes("pgbouncer=true");
+  const params = new URLSearchParams();
+
+  const queryStart = url.indexOf("?");
+  const base = queryStart === -1 ? url : url.slice(0, queryStart);
+  if (queryStart !== -1) {
+    new URLSearchParams(url.slice(queryStart + 1)).forEach((v, k) => params.set(k, v));
+  }
+
+  if (!params.has("connection_limit")) {
+    // Transaction pooler (6543): keep 1. Session pooler (5432): allow a few for serverless.
+    params.set("connection_limit", isTransactionPooler && isVercel ? "1" : isVercel ? "3" : "5");
+  }
+  if (!params.has("pool_timeout")) {
+    params.set("pool_timeout", isVercel ? "30" : "10");
+  }
+  if (!params.has("connect_timeout")) {
+    params.set("connect_timeout", "15");
+  }
+  if (isTransactionPooler && !params.has("pgbouncer")) {
+    params.set("pgbouncer", "true");
+  }
+
+  return `${base}?${params.toString()}`;
 }
 
 function resolveDatabaseUrl(): string {
@@ -20,7 +43,7 @@ function resolveDatabaseUrl(): string {
   if (configError) {
     throw new Error(configError);
   }
-  return withConnectionLimit(process.env.DATABASE_URL)!;
+  return appendPoolParams(process.env.DATABASE_URL)!;
 }
 
 const METRIC_MODELS = new Set(["PerformanceMetric", "SystemError"]);
@@ -85,9 +108,7 @@ function getPrismaClient(): ExtendedPrismaClient {
   }
   if (!prismaClient || isStalePrismaClient(prismaClient)) {
     prismaClient = createPrismaClient();
-    if (process.env.NODE_ENV !== "production") {
-      globalForPrisma.prisma = prismaClient;
-    }
+    globalForPrisma.prisma = prismaClient;
   }
   return prismaClient;
 }

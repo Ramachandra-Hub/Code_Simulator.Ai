@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/server/core/db/prisma";
-import { createToken, verifyPassword, ensureDemoUsers } from "@/server/lib/auth";
+import { createToken, verifyPassword } from "@/server/lib/auth";
 import { getDatabaseConfigError, isPrismaConnectionError } from "@/server/lib/db-config";
 import "@/server/init";
 
@@ -20,7 +20,6 @@ export async function POST(req: Request) {
   }
 
   try {
-    await ensureDemoUsers();
     const { email, password } = await req.json();
 
     const user = await prisma.user.findUnique({ where: { email } });
@@ -47,10 +46,14 @@ export async function POST(req: Request) {
     return response;
   } catch (err) {
     if (isPrismaConnectionError(err)) {
+      const msg = err instanceof Error ? err.message : "";
+      const poolHint = msg.includes("connection pool")
+        ? " Use Supabase Session pooler (port 5432) for DATABASE_URL on Vercel instead of Transaction pooler (6543)."
+        : "";
       return NextResponse.json(
         {
           error: process.env.VERCEL
-            ? "Cannot connect to database on Vercel. Use DATABASE_URL with db.*.supabase.co:5432 (copy from Supabase Dashboard), or the pooler host aws-0-REGION.pooler.supabase.com:6543 — not port 6543 on db.*.supabase.co."
+            ? `Database connection failed on Vercel.${poolHint} Verify pooler URL from Supabase → Connect.`
             : "Cannot connect to database. Check DATABASE_URL in .env, run npm run db:setup-supabase, then npm run db:seed",
         },
         { status: 503 }
