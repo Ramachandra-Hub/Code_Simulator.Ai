@@ -4,8 +4,21 @@ import { getPrompt, renderPrompt } from "./index";
 import { parseStructuredResponse } from "./json-utils";
 import type { PromptCategory, PromptVariables, PromptVersion } from "./types";
 
-export const DEFAULT_LLM_MODEL = process.env.OLLAMA_MODEL || "qwen3:8b";
-export const REASONING_LLM_MODEL = process.env.OLLAMA_MODEL_REASONING || "deepseek-r1:8b";
+function activeProvider(): string {
+  return (process.env.MODEL_PROVIDER || "ollama").toLowerCase();
+}
+
+function usesManagedApi(): boolean {
+  const p = activeProvider();
+  return p === "openai" || p === "anthropic" || p === "managed";
+}
+
+export const DEFAULT_LLM_MODEL = usesManagedApi()
+  ? process.env.OPENAI_MODEL || "gpt-4o-mini"
+  : process.env.OLLAMA_MODEL || "qwen3:8b";
+export const REASONING_LLM_MODEL = usesManagedApi()
+  ? process.env.OPENAI_MODEL_REASONING || process.env.OPENAI_MODEL || "gpt-4o"
+  : process.env.OLLAMA_MODEL_REASONING || "deepseek-r1:8b";
 
 function activeVersion(): PromptVersion {
   const v = (process.env.PROMPT_VERSION || "v2") as PromptVersion;

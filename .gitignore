@@ -12,6 +12,7 @@ build/
 .env
 .env.local
 .env.*.local
+.env.vercel
 
 # Logs & OS
 *.log
@@ -24,3 +25,4 @@ Thumbs.db
 
 # Vercel local link (contains project id)
 .vercel/
+.vercel

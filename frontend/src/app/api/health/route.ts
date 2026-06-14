@@ -8,6 +8,16 @@ import { getQueueStats } from "@/server/core/redis/queue-manager";
 import { isOtelEnabled } from "@/server/core/observability/otel-config";
 import { getDatabaseConfigError } from "@/server/lib/db-config";
 
+function safeDatabaseUrlHint(): { host: string | null; user: string | null; passwordLength: number | null } {
+  const url = process.env.DATABASE_URL || "";
+  const match = url.match(/^postgresql:\/\/([^:]+):([^@]+)@([^/?]+)/);
+  return {
+    user: match?.[1] ?? null,
+    host: match?.[3] ?? null,
+    passwordLength: match?.[2]?.length ?? null,
+  };
+}
+
 export async function GET() {
   const configError = getDatabaseConfigError();
   let database: "connected" | "unavailable" = "unavailable";
@@ -20,9 +30,9 @@ export async function GET() {
     databaseError = err instanceof Error ? err.message : "Database connection failed";
   }
 
-  const [providers, ollamaInfo, judge0Health, redis, qdrant, queues] = await Promise.all([
+  const [providers, ai, judge0Health, redis, qdrant, queues] = await Promise.all([
     modelGateway.getProviderStatus(),
-    modelGateway.getOllamaInfo(),
+    modelGateway.getAiServiceStatus(),
     judge0Client.healthCheck(),
     redisHealthCheck(),
     qdrantClient.healthCheck(),
@@ -33,14 +43,17 @@ export async function GET() {
     process.env.OLLAMA_MODEL || "qwen3:8b",
     process.env.OLLAMA_MODEL_REASONING || "deepseek-r1:8b",
   ];
+  const ollamaInfo = await modelGateway.getOllamaInfo();
   const installed = new Set(ollamaInfo.models);
-  const modelsReady = requiredModels.every(
-    (m) => installed.has(m) || [...installed].some((name) => name.startsWith(m.split(":")[0]))
-  );
+  const modelsReady =
+    modelGateway.getActiveProvider() === "heuristic" ||
+    requiredModels.every(
+      (m) => installed.has(m) || [...installed].some((name) => name.startsWith(m.split(":")[0]))
+    );
 
   const degraded =
     database !== "connected" ||
-    !ollamaInfo.available ||
+    !ai.online ||
     (judge0Client.isProductionMode() && !judge0Health.available) ||
     (redis.configured && !redis.available);
 
@@ -52,6 +65,7 @@ export async function GET() {
       configured: !configError,
       hasDatabaseUrl: Boolean(process.env.DATABASE_URL),
       hasDirectUrl: Boolean(process.env.DIRECT_URL),
+      ...safeDatabaseUrlHint(),
       error: configError || databaseError,
     },
     model: {

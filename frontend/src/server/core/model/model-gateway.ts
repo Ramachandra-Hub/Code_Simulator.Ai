@@ -131,6 +131,47 @@ class ModelGateway {
     return process.env.MODEL_PROVIDER || "ollama";
   }
 
+  /** Whether the configured AI provider (not only Ollama) is usable for status banners. */
+  async getAiServiceStatus(): Promise<{ online: boolean; message: string; provider: string }> {
+    const provider = this.getActiveProvider().toLowerCase();
+    const providers = await this.getProviderStatus();
+
+    if (provider === "heuristic") {
+      return { online: true, message: "Heuristic AI mode (beta/demo)", provider };
+    }
+    if (provider === "vllm") {
+      const online = Boolean(providers.vllm);
+      return {
+        online,
+        message: online ? "vLLM ready" : "vLLM offline — check VLLM_BASE_URL or set MODEL_PROVIDER=heuristic",
+        provider,
+      };
+    }
+    if (provider === "openai" || provider === "anthropic" || provider === "managed") {
+      const online = Boolean(providers["managed-api"]);
+      return {
+        online,
+        message: online ? `OpenAI ready (${process.env.OPENAI_MODEL || "gpt-4o-mini"})` : "Set OPENAI_API_KEY in environment variables",
+        provider,
+      };
+    }
+    if (providers.ollama) {
+      return { online: true, message: "AI models ready", provider: "ollama" };
+    }
+    if (providers.heuristic) {
+      return {
+        online: true,
+        message: "Ollama offline — using rule-based fallback. Start Ollama for full AI quality.",
+        provider: "heuristic-fallback",
+      };
+    }
+    return {
+      online: false,
+      message: "Ollama offline — interviews and coach will fail. Start Ollama or set MODEL_PROVIDER=heuristic.",
+      provider: "ollama",
+    };
+  }
+
   async getOllamaInfo(): Promise<{ available: boolean; models: string[]; baseUrl: string; defaultModel: string }> {
     const ollama = this.adapters.find((a) => a.name === "ollama") as OllamaAdapter | undefined;
     const baseUrl = process.env.OLLAMA_BASE_URL || "http://localhost:11434";

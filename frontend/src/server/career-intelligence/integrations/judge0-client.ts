@@ -1,6 +1,9 @@
 const JUDGE0_URL = process.env.JUDGE0_URL || "http://localhost:2358";
 const JUDGE0_API_KEY = process.env.JUDGE0_API_KEY || "";
-const JUDGE0_REQUIRE = process.env.JUDGE0_REQUIRE === "true" || process.env.NODE_ENV === "production";
+const JUDGE0_REQUIRE =
+  process.env.JUDGE0_REQUIRE !== undefined
+    ? process.env.JUDGE0_REQUIRE === "true"
+    : process.env.NODE_ENV === "production";
 
 const LANGUAGE_IDS: Record<string, number> = {
   python: 71,

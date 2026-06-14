@@ -13,6 +13,7 @@ import path from "path";
 
 const ROOT = path.join(__dirname, "..");
 const ENV_FILE = path.join(ROOT, ".env");
+const VERCEL_ENV_FILE = path.join(ROOT, ".env.vercel");
 const PROJECT = process.env.VERCEL_PROJECT || "code-simulator-ai";
 const PROD_URL = process.env.VERCEL_PROD_URL || "https://code-simulator-ai.vercel.app";
 const TARGETS = (process.env.VERCEL_ENV_TARGETS || "production,preview,development")
@@ -62,6 +63,7 @@ function parseEnv(content: string): Record<string, string> {
 function toVercelSupabaseUrls(vars: Record<string, string>): Record<string, string> {
   const ref = vars.SUPABASE_PROJECT_REF;
   const region = vars.SUPABASE_POOLER_REGION || vars.AWS_REGION || "";
+  const poolerPrefix = vars.SUPABASE_POOLER_PREFIX || "aws-0";
   const direct = vars.DIRECT_URL || vars.DATABASE_URL || "";
   if (!ref || !direct.includes("supabase.co") || direct.includes("pooler.supabase.com")) {
     return vars;
@@ -71,13 +73,26 @@ function toVercelSupabaseUrls(vars: Record<string, string>): Record<string, stri
   const password = match?.[1];
   if (!password || !region) return vars;
 
-  const poolerHost = `aws-0-${region}.pooler.supabase.com`;
+  const poolerHost = `${poolerPrefix}-${region}.pooler.supabase.com`;
   const user = `postgres.${ref}`;
+  // Session pooler (5432) for both — works better on Vercel serverless than transaction pooler (6543).
+  const sessionUrl = `postgresql://${user}:${password}@${poolerHost}:5432/postgres?sslmode=require`;
   return {
     ...vars,
-    DATABASE_URL: `postgresql://${user}:${password}@${poolerHost}:6543/postgres?pgbouncer=true&sslmode=require`,
-    DIRECT_URL: `postgresql://${user}:${password}@${poolerHost}:5432/postgres?sslmode=require`,
+    DATABASE_URL: sessionUrl,
+    DIRECT_URL: sessionUrl,
   };
+}
+
+function mergeVercelEnvFile(vars: Record<string, string>): Record<string, string> {
+  if (!existsSync(VERCEL_ENV_FILE)) return vars;
+  const vercelOnly = parseEnv(readFileSync(VERCEL_ENV_FILE, "utf8"));
+  const poolerKeys = ["DATABASE_URL", "DIRECT_URL", "SUPABASE_POOLER_REGION", "SUPABASE_POOLER_PREFIX"];
+  const merged = { ...vars };
+  for (const key of poolerKeys) {
+    if (vercelOnly[key]) merged[key] = vercelOnly[key];
+  }
+  return merged;
 }
 
 function toSupabasePoolerUrl(url: string): string {
@@ -89,11 +104,18 @@ function toSupabasePoolerUrl(url: string): string {
 }
 
 function applyVercelOverrides(vars: Record<string, string>): Record<string, string> {
-  const out = { ...vars };
+  const out = mergeVercelEnvFile({ ...vars });
   out.DATABASE_PROVIDER = out.DATABASE_PROVIDER || "supabase";
   out.NEXTAUTH_URL = PROD_URL;
   out.ALLOW_DEMO_USERS = "true";
   out.JUDGE0_REQUIRE = "false";
+  if (out.OPENAI_API_KEY?.trim()) {
+    out.MODEL_PROVIDER = "openai";
+  } else if (out.ANTHROPIC_API_KEY?.trim()) {
+    out.MODEL_PROVIDER = "anthropic";
+  } else {
+    out.MODEL_PROVIDER = "heuristic";
+  }
   const withPooler = toVercelSupabaseUrls(out);
   if (withPooler.DATABASE_URL) {
     withPooler.DATABASE_URL = toSupabasePoolerUrl(withPooler.DATABASE_URL);

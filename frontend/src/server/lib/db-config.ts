@@ -11,7 +11,16 @@ export function getDatabaseConfigError(): string | null {
   }
 
   if (process.env.VERCEL && url.includes("db.") && url.includes(".supabase.co") && !url.includes("pooler.supabase.com")) {
-    return "DATABASE_URL uses db.*.supabase.co which is IPv6-only. Vercel needs the Supabase pooler URL (pooler.supabase.com) from Dashboard → Connect → Transaction pooler.";
+    return "DATABASE_URL uses db.*.supabase.co which is IPv6-only. Vercel needs the Supabase pooler URL from Dashboard → Connect → Session pooler.";
+  }
+
+  if (
+    process.env.VERCEL &&
+    url.includes("pooler.supabase.com") &&
+    !url.includes(`postgres.${process.env.SUPABASE_PROJECT_REF || ""}`) &&
+    !url.includes("options=reference")
+  ) {
+    return "DATABASE_URL username must be postgres.PROJECT_REF. Copy the Session pooler URI from Supabase → Connect for project " + (process.env.SUPABASE_PROJECT_REF || "your project") + ".";
   }
 
   const placeholder = /postgres:(YOUR_DB_PASSWORD|\[YOUR_PASSWORD\])@/;
@@ -27,6 +36,8 @@ export function isPrismaConnectionError(err: unknown): boolean {
   return (
     msg.includes("Can't reach database") ||
     msg.includes("Authentication failed") ||
+    msg.includes("tenant/user") ||
+    msg.includes("Tenant or user not found") ||
     msg.includes("Database not configured") ||
     msg.includes("PrismaClientConstructorValidationError") ||
     msg.includes("P1001") ||

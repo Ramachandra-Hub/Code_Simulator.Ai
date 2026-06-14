@@ -18,15 +18,15 @@ export async function GET() {
     }
   }
 
-  const [ollamaInfo, judge0Available] = await Promise.all([
-    modelGateway.getOllamaInfo(),
+  const [ai, judge0Available] = await Promise.all([
+    modelGateway.getAiServiceStatus(),
     judge0Client.isAvailable(),
   ]);
 
-  const ollama = ollamaInfo.available ? "online" : "offline";
+  const ollama = ai.online ? "online" : "offline";
   const judge0 = judge0Available ? "online" : judge0Client.isProductionMode() ? "required_offline" : "offline_dev_ok";
 
-  const degraded = database !== "connected" || ollama === "offline";
+  const degraded = database !== "connected" || !ai.online;
 
   return NextResponse.json({
     status: degraded ? "degraded" : "ok",
@@ -34,8 +34,12 @@ export async function GET() {
       database: { status: database, message: configError || (database === "connected" ? "Connected" : "Cannot reach Supabase") },
       ollama: {
         status: ollama,
-        message: ollama === "online" ? "AI models ready" : "Ollama offline — interviews and coach will fail. Start Ollama or set MODEL_PROVIDER.",
-        model: ollamaInfo.defaultModel,
+        message: ai.message,
+        model:
+          (process.env.MODEL_PROVIDER || "").toLowerCase() === "openai"
+            ? process.env.OPENAI_MODEL || "gpt-4o-mini"
+            : process.env.OLLAMA_MODEL || "qwen3:8b",
+        provider: ai.provider,
       },
       judge0: {
         status: judge0,

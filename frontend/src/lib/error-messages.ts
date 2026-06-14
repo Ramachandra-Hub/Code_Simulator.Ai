@@ -1,7 +1,10 @@
 export function friendlyApiError(message: string): string {
   const lower = message.toLowerCase();
+  if (lower.includes("openai") || lower.includes("managed api")) {
+    return "OpenAI request failed. Verify OPENAI_API_KEY and billing at platform.openai.com.";
+  }
   if (lower.includes("ollama") || lower.includes("econnrefused") || lower.includes("fetch failed")) {
-    return "AI service (Ollama) is offline. Start Ollama with your model, or ask your admin to check MODEL_PROVIDER.";
+    return "AI service is offline. Check OPENAI_API_KEY or start Ollama locally.";
   }
   if (lower.includes("prisma") || lower.includes("database") || lower.includes("supabase") || lower.includes("can't reach")) {
     return "Database is temporarily unavailable. Your progress is safe — please try again in a moment.";

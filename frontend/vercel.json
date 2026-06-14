@@ -6,7 +6,6 @@
     "DATABASE_PROVIDER": "supabase",
     "ALLOW_DEMO_USERS": "true",
     "JUDGE0_REQUIRE": "false",
-    "PROMPT_VERSION": "v2",
-    "MODEL_PROVIDER": "ollama"
+    "PROMPT_VERSION": "v2"
   }
 }
