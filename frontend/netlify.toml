@@ -1,6 +1,5 @@
-# Monorepo entrypoint — Netlify reads this when Package directory = frontend
+# Next.js app package — set Netlify "Package directory" to `frontend`
 [build]
-  base = "frontend"
   command = "npm run build"
 
 [build.environment]
