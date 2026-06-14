@@ -6,14 +6,18 @@ import { redisHealthCheck } from "@/server/core/redis/redis-client";
 import { qdrantClient } from "@/server/career-intelligence/integrations/qdrant-client";
 import { getQueueStats } from "@/server/core/redis/queue-manager";
 import { isOtelEnabled } from "@/server/core/observability/otel-config";
+import { getDatabaseConfigError } from "@/server/lib/db-config";
 
 export async function GET() {
+  const configError = getDatabaseConfigError();
   let database: "connected" | "unavailable" = "unavailable";
+  let databaseError: string | null = configError;
   try {
     await prisma.$queryRaw`SELECT 1`;
     database = "connected";
-  } catch {
-    database = "unavailable";
+    databaseError = null;
+  } catch (err) {
+    databaseError = err instanceof Error ? err.message : "Database connection failed";
   }
 
   const [providers, ollamaInfo, judge0Health, redis, qdrant, queues] = await Promise.all([
@@ -44,6 +48,12 @@ export async function GET() {
     status: degraded ? "degraded" : "ok",
     database,
     databaseProvider: process.env.DATABASE_PROVIDER || "local",
+    databaseConfig: {
+      configured: !configError,
+      hasDatabaseUrl: Boolean(process.env.DATABASE_URL),
+      hasDirectUrl: Boolean(process.env.DIRECT_URL),
+      error: configError || databaseError,
+    },
     model: {
       activeProvider: modelGateway.getActiveProvider(),
       providers,

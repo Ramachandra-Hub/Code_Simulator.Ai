@@ -7,7 +7,16 @@ import "@/server/init";
 export async function POST(req: Request) {
   const configError = getDatabaseConfigError();
   if (configError) {
-    return NextResponse.json({ error: configError }, { status: 503 });
+    return NextResponse.json(
+      {
+        error: configError,
+        configured: {
+          databaseUrl: Boolean(process.env.DATABASE_URL),
+          directUrl: Boolean(process.env.DIRECT_URL),
+        },
+      },
+      { status: 503 }
+    );
   }
 
   try {
