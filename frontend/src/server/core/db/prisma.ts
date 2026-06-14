@@ -75,12 +75,27 @@ function isStalePrismaClient(client: ExtendedPrismaClient | undefined): boolean 
   return !c.userOnboarding || !c.usageEvent || !c.questionEffectiveness || !c.systemError || !c.voiceInterviewSession;
 }
 
-let prismaClient: ExtendedPrismaClient = globalForPrisma.prisma ?? createPrismaClient();
-if (isStalePrismaClient(prismaClient)) {
-  prismaClient = createPrismaClient();
-}
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prismaClient;
+let prismaClient: ExtendedPrismaClient | undefined;
+
+function getPrismaClient(): ExtendedPrismaClient {
+  const cached = process.env.NODE_ENV !== "production" ? globalForPrisma.prisma : undefined;
+  if (!prismaClient && cached && !isStalePrismaClient(cached)) {
+    prismaClient = cached;
+  }
+  if (!prismaClient || isStalePrismaClient(prismaClient)) {
+    prismaClient = createPrismaClient();
+    if (process.env.NODE_ENV !== "production") {
+      globalForPrisma.prisma = prismaClient;
+    }
+  }
+  return prismaClient;
 }
 
-export const prisma = prismaClient;
+/** Lazy singleton — avoids connecting to the database during `next build` on Vercel. */
+export const prisma: ExtendedPrismaClient = new Proxy({} as ExtendedPrismaClient, {
+  get(_target, prop) {
+    const client = getPrismaClient();
+    const value = Reflect.get(client, prop, client);
+    return typeof value === "function" ? value.bind(client) : value;
+  },
+});
