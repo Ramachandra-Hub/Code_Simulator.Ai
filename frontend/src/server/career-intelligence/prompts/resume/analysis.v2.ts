@@ -14,10 +14,14 @@ export const resumeAnalysisV2: PromptTemplate = {
   "strengths": ["string — resume strengths"],
   "gaps": ["string — missing elements or weak areas"],
   "keywordSuggestions": ["string — role-specific keywords to add"],
-  "atsTips": ["string — concrete ATS improvements"]
+  "atsTips": ["string — concrete ATS improvements"],
+  "aiQualityScore": 0
 }
 
 Target role: {{targetRole}}
-ATS score (pre-computed): {{atsScore}}
-Resume data: {{resumeData}}`,
+ATS score (computed from resume content): {{atsScore}}
+Keyword match: {{keywordMatchPct}}%
+Resume data: {{resumeData}}
+
+Also provide aiQualityScore (0-100) for overall resume quality: writing clarity, impact metrics, project depth, and role fit.`,
 };

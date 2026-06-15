@@ -7,10 +7,12 @@ import { analysisEnrichmentV2 } from "./response/analysis-enrichment.v2";
 import { sessionEvaluationV2 } from "./evaluation/session-evaluation.v2";
 import { feedbackV2 } from "./evaluation/feedback.v2";
 import { resumeAnalysisV2 } from "./resume/analysis.v2";
+import { resumeParseV2 } from "./resume/parse.v2";
 import { codingProblemGenerationV2 } from "./coding/problem-generation.v2";
 import { codingDiscussionV2 } from "./coding/discussion.v2";
 import { careerRecommendationsV2 } from "./career/recommendations.v2";
 import { careerRoadmapV2 } from "./career/roadmap.v2";
+import { panelQuestionGenerationV2 } from "./panel/panel-question-generation.v2";
 
 const REGISTRY: PromptTemplate[] = [
   questionGenerationV1,
@@ -25,6 +27,8 @@ const REGISTRY: PromptTemplate[] = [
   codingDiscussionV2,
   careerRecommendationsV2,
   careerRoadmapV2,
+  panelQuestionGenerationV2,
+  resumeParseV2,
 ];
 
 const STABLE_VERSION: PromptVersion = (process.env.PROMPT_VERSION as PromptVersion) || "v2";

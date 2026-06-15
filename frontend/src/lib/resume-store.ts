@@ -85,6 +85,24 @@ export async function fetchLatestAnalysisAsync(resumeId?: string) {
   return apiFetch<Record<string, unknown> | null>(`/resume/analysis${q}`);
 }
 
+export async function uploadResumeFileAsync(file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch("/api/resume/upload", {
+    method: "POST",
+    body: formData,
+    credentials: "include",
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || "Upload failed");
+  return json as {
+    resume: Record<string, unknown>;
+    analysis: Record<string, unknown>;
+    extractedChars: number;
+    fileName: string;
+  };
+}
+
 function mapDbResume(r: Record<string, unknown>): ResumeData {
   const data = (r.data as ResumeData) || r;
   const ats = (r.atsScores as Array<{

@@ -16,7 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { codingProblems, learningPaths, placementDrives, upcomingAssessments } from "@/lib/mock-data";
 import { CODING_LANGUAGES, DSA_TOPICS, LEARNING_PATHS } from "@/lib/constants";
 import { MonacoEditorPanel } from "@/components/coding/monaco-editor-panel";
-import { analyzeResumeAsync, fetchLatestAnalysisAsync, fetchResumesAsync, setActiveResumeAsync } from "@/lib/resume-store";
+import { analyzeResumeAsync, fetchLatestAnalysisAsync, fetchResumesAsync, setActiveResumeAsync, uploadResumeFileAsync } from "@/lib/resume-store";
 import { fetchInterviewSessionsAsync } from "@/lib/interview-store";
 import type { ResumeData } from "@/lib/resume-types";
 import type { InterviewSession } from "@/lib/interview-types";
@@ -258,20 +258,25 @@ export function ResumeListPanel() {
 
 interface AtsAnalysisResult {
   atsScore: number;
+  aiQualityScore?: number;
+  keywordMatchPct?: number;
   keywordsMatched: string[];
   keywordsMissing: string[];
   strengths: string[];
   weaknesses: string[];
   recommendations: string[];
   summary?: string;
+  atsBreakdown?: Record<string, number>;
 }
 
 export function ATSAnalyzePanel() {
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<AtsAnalysisResult | null>(null);
   const [activeResume, setActiveResume] = useState<ResumeData | null>(null);
+  const [uploadedName, setUploadedName] = useState<string | null>(null);
 
   useEffect(() => {
     fetchResumesAsync().then((resumes) => {
@@ -279,24 +284,31 @@ export function ATSAnalyzePanel() {
     });
   }, []);
 
+  const applyAnalysis = (analysis: Record<string, unknown>) => {
+    setResult({
+      atsScore: analysis.atsScore as number,
+      aiQualityScore: analysis.aiQualityScore as number | undefined,
+      keywordMatchPct: analysis.keywordMatchPct as number | undefined,
+      keywordsMatched: (analysis.keywordsMatched as string[]) || [],
+      keywordsMissing: (analysis.keywordsMissing as string[]) || [],
+      strengths: (analysis.strengths as string[]) || [],
+      weaknesses: (analysis.weaknesses as string[]) || [],
+      recommendations: (analysis.recommendations as string[]) || [],
+      summary: analysis.summary as string,
+      atsBreakdown: analysis.atsBreakdown as Record<string, number> | undefined,
+    });
+  };
+
   const runAnalysis = async () => {
     if (!activeResume) {
-      toast({ title: "No resume found", description: "Build and save a resume first.", variant: "error" });
+      toast({ title: "No resume found", description: "Upload a PDF/DOCX or build a resume first.", variant: "error" });
       return;
     }
     setAnalyzing(true);
     try {
       const analysis = await analyzeResumeAsync(activeResume, activeResume.id);
-      setResult({
-        atsScore: analysis.atsScore as number,
-        keywordsMatched: (analysis.keywordsMatched as string[]) || [],
-        keywordsMissing: (analysis.keywordsMissing as string[]) || [],
-        strengths: (analysis.strengths as string[]) || [],
-        weaknesses: (analysis.weaknesses as string[]) || [],
-        recommendations: (analysis.recommendations as string[]) || [],
-        summary: analysis.summary as string,
-      });
-      toast({ title: "Resume analyzed", description: `ATS score: ${analysis.atsScore}/100`, variant: "success" });
+      applyAnalysis(analysis);
+      toast({ title: "Resume analyzed", description: `ATS ${analysis.atsScore}/100 · AI Quality ${analysis.aiQualityScore ?? "—"}/100`, variant: "success" });
     } catch {
       toast({ title: "Analysis failed", variant: "error" });
     } finally {
@@ -304,27 +316,71 @@ export function ATSAnalyzePanel() {
     }
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setUploadedName(file.name);
+    try {
+      const { resume, analysis } = await uploadResumeFileAsync(file);
+      setActiveResume({
+        ...(resume as unknown as ResumeData),
+        id: resume.id as string,
+      });
+      applyAnalysis(analysis);
+      toast({
+        title: "Resume scanned",
+        description: `${file.name} — ATS ${analysis.atsScore}/100`,
+        variant: "success",
+      });
+    } catch (err) {
+      toast({
+        title: "Upload failed",
+        description: err instanceof Error ? err.message : "Could not parse file",
+        variant: "error",
+      });
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
   return (
     <Card className="glass-card max-w-xl">
-      <CardHeader><CardTitle>ATS Analysis — {activeResume?.name || "No resume"}</CardTitle></CardHeader>
+      <CardHeader><CardTitle>ATS Analysis — {activeResume?.name || "Upload resume"}</CardTitle></CardHeader>
       <CardContent className="space-y-4">
         <div
           className="border-2 border-dashed border-border rounded-xl p-8 text-center cursor-pointer hover:border-primary/50 transition-colors"
-          onClick={() => fileRef.current?.click()}
+          onClick={() => !uploading && fileRef.current?.click()}
         >
           <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-          <p className="text-sm text-muted-foreground">Uses your saved resume from the database</p>
-          <input ref={fileRef} type="file" accept=".pdf,.doc,.docx" className="hidden" onChange={runAnalysis} />
+          <p className="text-sm font-medium">Upload PDF or DOCX</p>
+          <p className="text-xs text-muted-foreground mt-1">AI scans your file, extracts content, and scores ATS compatibility</p>
+          {uploadedName && <p className="text-xs text-primary mt-2">Last upload: {uploadedName}</p>}
+          <input ref={fileRef} type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="hidden" onChange={handleFileUpload} />
         </div>
         {result && (
-          <div className="rounded-xl bg-primary/10 p-4 text-center">
-            <p className="text-3xl font-bold text-primary">{result.atsScore}/100</p>
-            <p className="text-sm text-muted-foreground">ATS Compatibility Score (heuristic)</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-xl bg-primary/10 p-4 text-center">
+              <p className="text-3xl font-bold text-primary">{result.atsScore}/100</p>
+              <p className="text-sm text-muted-foreground">ATS Score</p>
+              {result.keywordMatchPct != null && (
+                <p className="text-xs text-muted-foreground mt-1">{result.keywordMatchPct}% keyword match</p>
+              )}
+            </div>
+            <div className="rounded-xl bg-violet-500/10 p-4 text-center">
+              <p className="text-3xl font-bold text-violet-600">{result.aiQualityScore ?? "—"}/100</p>
+              <p className="text-sm text-muted-foreground">AI Quality Score</p>
+            </div>
           </div>
         )}
-        <Button onClick={runAnalysis} className="w-full" disabled={analyzing || !activeResume}>
-          {analyzing ? "Analyzing..." : "Analyze Resume"}
+        {result?.summary && (
+          <p className="text-sm text-muted-foreground border-l-2 border-primary/40 pl-3">{result.summary}</p>
+        )}
+        <Button onClick={runAnalysis} className="w-full" disabled={analyzing || uploading || !activeResume}>
+          {analyzing ? "Analyzing..." : "Re-analyze saved resume"}
         </Button>
+        {uploading && <p className="text-xs text-center text-muted-foreground">Scanning and parsing your resume…</p>}
       </CardContent>
     </Card>
   );
@@ -341,12 +397,15 @@ export function ATSReportPanel() {
       if (analysis) {
         setResult({
           atsScore: analysis.atsScore as number,
+          aiQualityScore: analysis.aiQualityScore as number | undefined,
+          keywordMatchPct: analysis.keywordMatchPct as number | undefined,
           keywordsMatched: (analysis.keywordsMatched as string[]) || [],
           keywordsMissing: (analysis.keywordsMissing as string[]) || [],
           strengths: (analysis.strengths as string[]) || [],
           weaknesses: (analysis.weaknesses as string[]) || [],
           recommendations: (analysis.recommendations as string[]) || [],
           summary: analysis.summary as string,
+          atsBreakdown: analysis.atsBreakdown as Record<string, number> | undefined,
         });
       } else if (active.atsScore) {
         setResult({
@@ -365,15 +424,20 @@ export function ATSReportPanel() {
     return <p className="text-sm text-muted-foreground">Run ATS analysis to see your report.</p>;
   }
 
-  const keywordScore = result.keywordsMatched.length
-    ? Math.round((result.keywordsMatched.length / (result.keywordsMatched.length + result.keywordsMissing.length)) * 100)
-    : 0;
-
+  const breakdown = result.atsBreakdown;
   const items = [
-    { label: "Overall ATS Score", score: result.atsScore },
-    { label: "Keywords Match", score: keywordScore },
-    { label: "Skills Coverage", score: Math.min(100, result.keywordsMatched.length * 12) },
-  ];
+    { label: "ATS Score", score: result.atsScore },
+    { label: "AI Quality Score", score: result.aiQualityScore ?? 0 },
+    { label: "Keyword Match", score: result.keywordMatchPct ?? (result.keywordsMatched.length
+      ? Math.round((result.keywordsMatched.length / (result.keywordsMatched.length + result.keywordsMissing.length)) * 100)
+      : 0) },
+    ...(breakdown
+      ? [
+          { label: "Contact & Links", score: Math.round(((breakdown.contactInfo || 0) + (breakdown.links || 0)) / 10 * 100) },
+          { label: "Content (Exp + Projects)", score: Math.round(((breakdown.experience || 0) + (breakdown.projects || 0)) / 25 * 100) },
+        ]
+      : []),
+  ].filter((item) => item.label !== "AI Quality Score" || result.aiQualityScore != null);
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -387,6 +451,9 @@ export function ATSReportPanel() {
           </div>
         ))}
       </div>
+      {result.summary && (
+        <p className="text-sm text-muted-foreground border-l-2 border-primary/30 pl-3">{result.summary}</p>
+      )}
       {result.keywordsMatched.length > 0 && (
         <div>
           <p className="text-sm font-medium mb-2">Keywords Found</p>

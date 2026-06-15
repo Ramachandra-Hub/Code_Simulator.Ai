@@ -61,6 +61,7 @@ export function PanelInterviewSession() {
       setCurrentQuestion(opts.question);
       setSpokenAnswer("");
       setLiveSpeech("");
+      stopNaturalSpeech();
       await immersionThinkingDelay(600, 1600);
 
       await speakPanelTurn({
@@ -168,6 +169,7 @@ export function PanelInterviewSession() {
     setThinkingStatus(pickThinkingMessage());
     setStatusHint("Panel is reviewing your answer...");
     setLiveSpeech("");
+    stopNaturalSpeech();
     await immersionThinkingDelay();
     setTranscript((prev) => [
       ...prev,

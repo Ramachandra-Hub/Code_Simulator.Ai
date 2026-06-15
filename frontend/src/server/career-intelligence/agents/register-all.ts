@@ -40,16 +40,20 @@ const agents = [
   }),
   agent("resume-analysis", "ResumeAnalysisAgent", "Analyze resume quality and gaps", "resume", ["resume-store", "prompt-registry"], ["quality-score"], async (input) => {
     const data = input.data as Record<string, unknown>;
-    const skills = (data.skills as string[]) || [];
-    const atsScore = (input.atsScore as number) ?? Math.min(100, 40 + skills.length * 8 + (data.summary ? 15 : 0));
+    const atsScore = (input.atsScore as number) ?? 0;
+    const keywordMatchPct = (input.keywordMatchPct as number) ?? 0;
     const targetRole = (input.targetRole as string) || (data.targetRole as string) || "Software Engineer";
+    const { computeAiQualityScore, computeAtsScore } = await import("../evaluators/ats-scoring-engine");
+    const ats = computeAtsScore(data, targetRole);
+    const baselineAi = computeAiQualityScore(data, ats);
 
     const fallback = {
-      summary: `Resume scores ${atsScore}/100 for ${targetRole}. Add more role-specific keywords and quantified achievements.`,
-      strengths: skills.length >= 3 ? ["Good skill coverage"] : ["Basic structure present"],
-      gaps: skills.length < 5 ? ["Expand technical skills section"] : [],
-      keywordSuggestions: [targetRole, "projects", "internship"],
-      atsTips: atsScore < 70 ? ["Add role-specific keywords from the job description"] : ["Maintain keyword density"],
+      summary: `ATS score ${atsScore}/100 (${keywordMatchPct}% keyword match for ${targetRole}). Review gaps below to improve parseability and role fit.`,
+      strengths: ats.keywordsMatched.length >= 4 ? ["Solid role keyword coverage"] : ["Resume structure detected"],
+      gaps: ats.feedback.slice(0, 4),
+      keywordSuggestions: ats.keywordsMissing.slice(0, 6),
+      atsTips: ats.feedback.slice(0, 5),
+      aiQualityScore: baselineAi,
     };
 
     const { data: analysis, valid, source } = await llmPromptJson(
@@ -58,30 +62,37 @@ const agents = [
       {
         targetRole,
         atsScore,
+        keywordMatchPct,
         resumeData: JSON.stringify(data).slice(0, 4000),
       },
       ResumeAnalysisSchema,
       fallback
     );
 
+    const aiQualityScore =
+      analysis.aiQualityScore != null && analysis.aiQualityScore >= 0
+        ? Math.round(analysis.aiQualityScore)
+        : baselineAi;
+
     return {
       result: {
         analysis: analysis.summary,
         score: atsScore,
+        aiQualityScore,
         strengths: analysis.strengths,
         gaps: analysis.gaps,
         keywordSuggestions: analysis.keywordSuggestions,
         atsTips: analysis.atsTips,
-        source: valid ? `llm-${source}` : "heuristic-fallback",
+        source: valid ? `llm-${source}` : "ats-engine-fallback",
       },
-      confidence: valid ? 0.88 : 0.75,
+      confidence: valid ? 0.88 : 0.82,
     };
   }),
-  agent("ats-agent", "ATSAgent", "Score resume ATS compatibility", "resume", ["keyword-matcher"], ["keyword-coverage"], async (input) => {
+  agent("ats-agent", "ATSAgent", "Score resume ATS compatibility", "resume", ["keyword-matcher", "ats-engine"], ["keyword-coverage"], async (input) => {
     const data = input.data as Record<string, unknown>;
-    const skills = (data.skills as string[]) || [];
-    const score = Math.min(100, 40 + skills.length * 8 + (data.summary ? 15 : 0));
-    return { result: { score, feedback: score < 70 ? ["Add more role-specific keywords"] : ["Strong ATS compatibility"] }, confidence: 0.9 };
+    const { computeAtsScore } = await import("../evaluators/ats-scoring-engine");
+    const result = computeAtsScore(data, (input.targetRole as string) || (data.targetRole as string));
+    return { result: { score: result.score, feedback: result.feedback, breakdown: result.breakdown }, confidence: 0.95 };
   }),
   agent("skill-gap", "SkillGapAgent", "Identify skill gaps for target role", "resume", ["skill-taxonomy"], ["gap-analysis"], async (input, _ctx, complete) => {
     const text = await complete(`Identify skill gaps for ${input.targetRole} given skills: ${JSON.stringify(input.skills)}`);

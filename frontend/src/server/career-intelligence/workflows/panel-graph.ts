@@ -1,4 +1,5 @@
-import { AgentFactory } from "../../core/agent/agent-factory";
+import { llmPromptJson } from "../prompts/agent-llm";
+import { QuestionGenerationSchema } from "../prompts/schemas";
 import { evaluateResponse } from "../evaluators/response-evaluator";
 import {
   runPanelModerator,
@@ -8,6 +9,8 @@ import {
 import { evaluatePanelistTurn } from "../evaluators/panel-evaluation-evaluator";
 import { normalizePanelQuestion } from "@/lib/speech-sanitize";
 import { MNC_PANEL_ROSTER, MODERATOR_NAME, type PanelPersonaConfig } from "../panel/panel-personas";
+import { isEchoOfAnswer, pickFromPool } from "../panel/panel-question-utils";
+import { QUESTION_BANK } from "../knowledge/question-bank";
 import { extractEarlierAnswerSnippet } from "../services/interview-realism";
 
 export interface PanelTurnResult {
@@ -19,6 +22,61 @@ export interface PanelTurnResult {
   interrupted: boolean;
 }
 
+const PERSONA_BANK: Record<string, string[]> = {
+  hr: QUESTION_BANK.hr,
+  technical_lead: QUESTION_BANK.technical,
+  engineering_manager: QUESTION_BANK.behavioral,
+  director: [...QUESTION_BANK.behavioral, ...QUESTION_BANK.system_design],
+  recruiter: QUESTION_BANK.hr,
+};
+
+const ACTION_GUIDE: Record<ModeratorDecision["action"], string> = {
+  question: "Ask a new interview question appropriate to your role.",
+  follow_up: "Ask a sharp follow-up on the candidate's last answer — probe deeper, do not repeat their words.",
+  interrupt: "Politely interrupt and redirect — the answer was vague. Ask for specifics.",
+  challenge: "Challenge the candidate's claim. Ask for metrics, trade-offs, or evidence.",
+  cross_question:
+    "Reference something the candidate said earlier in the transcript, then ask one focused question.",
+};
+
+function buildFallbackQuestion(opts: {
+  persona: PanelPersonaConfig;
+  action: ModeratorDecision["action"];
+  earlierSnippet?: string | null;
+  asked: Set<string>;
+}): string {
+  const prefix =
+    opts.action === "interrupt"
+      ? "Let me stop you there — "
+      : opts.action === "challenge"
+        ? "I'd like to push back on that — "
+        : opts.action === "cross_question" && opts.earlierSnippet
+          ? `Earlier you mentioned ${opts.earlierSnippet.replace(/\.$/, "")} — `
+          : "";
+
+  const pool = PERSONA_BANK[opts.persona.persona] || QUESTION_BANK.technical;
+  const picked = pickFromPool(pool, opts.asked);
+  const base =
+    picked ||
+    pickFromPool([...QUESTION_BANK.technical, ...QUESTION_BANK.behavioral, ...QUESTION_BANK.hr], opts.asked) ||
+    "What is your strongest technical achievement and what was your personal contribution?";
+
+  if (opts.action === "cross_question" && opts.earlierSnippet && !prefix) {
+    return normalizePanelQuestion(
+      `Earlier you mentioned ${opts.earlierSnippet.replace(/\.$/, "")} — can you walk me through your specific contribution?`
+    );
+  }
+
+  return normalizePanelQuestion(prefix + base);
+}
+
+function isValidQuestion(q: string, answer: string, asked: Set<string>): boolean {
+  if (!q || q.length < 12) return false;
+  if (asked.has(q)) return false;
+  if (isEchoOfAnswer(q, answer)) return false;
+  return true;
+}
+
 export async function generatePanelQuestion(opts: {
   persona: PanelPersonaConfig;
   action: ModeratorDecision["action"];
@@ -27,73 +85,50 @@ export async function generatePanelQuestion(opts: {
   recentTranscript: string;
   interrupted: boolean;
   earlierSnippet?: string | null;
-  skills?: string[];
+  askedQuestions: string[];
   userId: string;
   sessionId: string;
 }): Promise<string> {
-  const prompt = buildPanelQuestionPrompt({
-    persona: opts.persona,
-    action: opts.action,
-    targetRole: opts.targetRole,
-    answer: opts.answer,
-    recentTranscript: opts.recentTranscript,
-    interrupted: opts.interrupted,
-    earlierSnippet: opts.earlierSnippet,
-  });
+  const asked = new Set(opts.askedQuestions);
+  const actionGuide = ACTION_GUIDE[opts.action];
+  const contextLine = opts.earlierSnippet ? `Earlier answer snippet to reference: "${opts.earlierSnippet}"` : "";
 
   try {
-    const agent = AgentFactory.create(opts.persona.agentId);
-    const result = await agent.run(
+    const { data, valid } = await llmPromptJson(
+      "panel",
+      "question-generation",
       {
+        panelistName: opts.persona.name,
+        panelistRole: opts.persona.role,
+        personality: opts.persona.personality,
+        expertise: opts.persona.expertise.join(", "),
+        questioningStyle: opts.persona.questioningStyle,
         targetRole: opts.targetRole,
-        skills: opts.skills,
-        answer: opts.answer,
-        action: opts.action,
-        prompt,
-        asked: [],
+        actionGuide,
+        interruptedNote: opts.interrupted ? "You are interrupting the candidate." : "",
+        contextLine,
+        asked: JSON.stringify([...asked]),
+        recentTranscript: opts.recentTranscript,
+        answer: opts.answer.slice(0, 1500),
       },
-      { userId: opts.userId, sessionId: opts.sessionId }
+      QuestionGenerationSchema,
+      { question: "", difficulty: "medium" as const }
     );
-    const q = (result.result as { question?: string })?.question;
-    if (q && q.length > 10) return normalizePanelQuestion(q);
+
+    const q = data.question?.trim();
+    if (valid && q && isValidQuestion(normalizePanelQuestion(q), opts.answer, asked)) {
+      return normalizePanelQuestion(q);
+    }
   } catch {
-    // fallback below
+    // bank fallback below
   }
 
-  const fallbacks: Record<string, string[]> = {
-    hr: [
-      "What motivates you to join our organization, and how do your values align with our culture?",
-      "Walk me through a time you had to adapt to a significant change at work.",
-    ],
-    technical_lead: [
-      "Can you walk me through the architecture of your most complex project and the trade-offs you made?",
-      "How would you debug a production incident affecting 10% of users?",
-    ],
-    engineering_manager: [
-      "Tell me about a time you had to deliver under a tight deadline with competing priorities.",
-      "How do you handle disagreement within your team on technical direction?",
-    ],
-    director: [
-      "If you had to present this initiative to the executive team in two minutes, what would you say?",
-      "How do you balance technical debt against business delivery at scale?",
-    ],
-    recruiter: [
-      "In one minute, why should we hire you for this role over other candidates?",
-      "How do you communicate complex technical work to non-technical stakeholders?",
-    ],
-  };
-
-  const pool = fallbacks[opts.persona.persona] || fallbacks.technical_lead;
-  const prefix =
-    opts.action === "interrupt"
-      ? "Let me stop you there — "
-      : opts.action === "challenge"
-        ? "I'd like to push back on that — "
-        : opts.action === "cross_question" && opts.earlierSnippet
-          ? `Earlier you mentioned ${opts.earlierSnippet.replace(/\.$/, "")} — can you walk me through your specific contribution?`
-          : "";
-
-  return normalizePanelQuestion(prefix + pool[Math.floor(Math.random() * pool.length)]);
+  return buildFallbackQuestion({
+    persona: opts.persona,
+    action: opts.action,
+    earlierSnippet: opts.earlierSnippet,
+    asked,
+  });
 }
 
 export async function runPanelTurnGraph(opts: {
@@ -110,6 +145,7 @@ export async function runPanelTurnGraph(opts: {
     evaluation?: Record<string, unknown> | null;
   }>;
   recentTranscript: Array<{ speaker: string; text: string; role: string }>;
+  askedQuestions: string[];
   turnCount: number;
   maxTurns: number;
   lastQuestion: string;
@@ -157,7 +193,7 @@ export async function runPanelTurnGraph(opts: {
     recentTranscript: transcriptText,
     interrupted: decision.interrupted,
     earlierSnippet,
-    skills: opts.skills,
+    askedQuestions: opts.askedQuestions,
     userId: opts.userId,
     sessionId: opts.sessionId,
   });
@@ -187,12 +223,19 @@ export async function runPanelTurnGraph(opts: {
   };
 }
 
-export function getOpeningPanelMessage(targetRole: string): { moderator: string; firstQuestion: string; speaker: PanelPersonaConfig } {
+export function getOpeningPanelMessage(targetRole: string): {
+  moderator: string;
+  firstQuestion: string;
+  speaker: PanelPersonaConfig;
+} {
   const hr = MNC_PANEL_ROSTER.find((p) => p.persona === "hr")!;
+  const pool = PERSONA_BANK.hr;
+  const firstFromBank = pool[Math.floor(Math.random() * pool.length)];
   return {
     moderator: `Welcome to your panel interview. ${hr.name} will ask the first question.`,
     firstQuestion: normalizePanelQuestion(
-      `Please introduce yourself and tell us why you are interested in the ${targetRole} role.`
+      firstFromBank ||
+        `Please introduce yourself and tell us why you are interested in the ${targetRole} role.`
     ),
     speaker: hr,
   };

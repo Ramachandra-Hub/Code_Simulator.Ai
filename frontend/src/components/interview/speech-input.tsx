@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Mic, Square, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -92,6 +92,8 @@ export function SpeechInput({ onTranscript, onError, disabled }: SpeechInputProp
     }
     setStatus("idle");
   }, []);
+
+  useEffect(() => () => stopRecognition(), [stopRecognition]);
 
   const attachHandlers = useCallback(
     (recognition: SpeechRecognitionInstance) => {

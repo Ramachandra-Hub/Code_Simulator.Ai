@@ -169,6 +169,8 @@ export async function submitPanelAnswer(input: {
   }));
   recentTranscript.push({ speaker: "You", text: input.answer, role: "student" });
 
+  const askedQuestions = session.turns.filter((t) => t.role === "ai").map((t) => t.content);
+
   const resumeData = session.resume?.data as { skills?: string[] } | undefined;
   const turnResult = await runPanelTurnGraph({
     sessionId: session.id,
@@ -184,6 +186,7 @@ export async function submitPanelAnswer(input: {
       evaluation: m.evaluation as Record<string, unknown> | null,
     })),
     recentTranscript,
+    askedQuestions,
     turnCount: panelSession.turnCount + 1,
     maxTurns: panelSession.maxTurns,
     lastQuestion,

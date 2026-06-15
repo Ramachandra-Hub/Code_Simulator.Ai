@@ -32,6 +32,7 @@ export const ResumeAnalysisSchema = z.object({
   gaps: z.array(z.string()).default([]),
   keywordSuggestions: z.array(z.string()).default([]),
   atsTips: z.array(z.string()).default([]),
+  aiQualityScore: z.number().min(0).max(100).optional(),
 });
 
 export type QuestionGenerationResult = z.infer<typeof QuestionGenerationSchema>;
