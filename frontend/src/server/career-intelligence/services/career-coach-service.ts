@@ -13,6 +13,7 @@ export async function gatherStudentCoachContext(userId: string): Promise<Student
     latestInterview,
     interviewReports,
     codingSessions,
+    codingOsAccepted,
     githubSnap,
     linkedinSnap,
     leetcodeStats,
@@ -20,35 +21,36 @@ export async function gatherStudentCoachContext(userId: string): Promise<Student
     githubInt,
     linkedinInt,
   ] = await Promise.all([
-      prisma.resume.findFirst({
-        where: { userId },
-        orderBy: { updatedAt: "desc" },
-        include: { atsScores: { take: 1, orderBy: { createdAt: "desc" } } },
-      }),
-      prisma.interviewSession.findFirst({
-        where: { userId, status: "completed" },
-        orderBy: { completedAt: "desc" },
-        include: { reportRecord: true },
-      }),
-      prisma.interviewReport.findMany({
-        where: { session: { userId } },
-        orderBy: { createdAt: "desc" },
-        take: 5,
-        include: { session: { select: { id: true, type: true } } },
-      }),
-      prisma.codingSession.findMany({
-        where: { userId, status: "completed" },
-        orderBy: { completedAt: "desc" },
-        take: 5,
-        include: { evaluations: { take: 1, orderBy: { createdAt: "desc" } } },
-      }),
-      prisma.githubSnapshot.findFirst({ where: { userId }, orderBy: { analyzedAt: "desc" } }),
-      prisma.linkedInSnapshot.findFirst({ where: { userId }, orderBy: { analyzedAt: "desc" } }),
-      prisma.leetCodeStats.findFirst({ where: { userId }, orderBy: { syncedAt: "desc" } }),
-      prisma.hackerRankStats.findFirst({ where: { userId }, orderBy: { syncedAt: "desc" } }),
-      prisma.integrationAccount.findUnique({ where: { userId_provider: { userId, provider: "github" } } }),
-      prisma.integrationAccount.findUnique({ where: { userId_provider: { userId, provider: "linkedin" } } }),
-    ]);
+    prisma.resume.findFirst({
+      where: { userId },
+      orderBy: { updatedAt: "desc" },
+      include: { atsScores: { take: 1, orderBy: { createdAt: "desc" } } },
+    }),
+    prisma.interviewSession.findFirst({
+      where: { userId, status: "completed" },
+      orderBy: { completedAt: "desc" },
+      include: { reportRecord: true },
+    }),
+    prisma.interviewReport.findMany({
+      where: { session: { userId } },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+      include: { session: { select: { id: true, type: true } } },
+    }),
+    prisma.codingSession.findMany({
+      where: { userId, status: "completed" },
+      orderBy: { completedAt: "desc" },
+      take: 5,
+      include: { evaluations: { take: 1, orderBy: { createdAt: "desc" } } },
+    }),
+    prisma.codeProblemSubmission.count({ where: { userId, verdict: "accepted" } }),
+    prisma.githubSnapshot.findFirst({ where: { userId }, orderBy: { analyzedAt: "desc" } }),
+    prisma.linkedInSnapshot.findFirst({ where: { userId }, orderBy: { analyzedAt: "desc" } }),
+    prisma.leetCodeStats.findFirst({ where: { userId }, orderBy: { syncedAt: "desc" } }),
+    prisma.hackerRankStats.findFirst({ where: { userId }, orderBy: { syncedAt: "desc" } }),
+    prisma.integrationAccount.findUnique({ where: { userId_provider: { userId, provider: "github" } } }),
+    prisma.integrationAccount.findUnique({ where: { userId_provider: { userId, provider: "linkedin" } } }),
+  ]);
 
   const resumeScore = resume?.atsScores[0]?.score ?? 0;
   const interviewScores = latestInterview?.scores as { overall?: number; confidence?: number } | null;
@@ -100,6 +102,7 @@ export async function gatherStudentCoachContext(userId: string): Promise<Student
     hackerrankSummary: hackerrankStats
       ? `HackerRank score ${hackerrankStats.score ?? 0}, badges and certifications synced`
       : "No HackerRank data — connect username to sync",
+    codingOsSummary: `${codingOsAccepted} Coding OS problems accepted · twin coding readiness ${Math.round(profile.codingReadiness)}%`,
     professionalScores: {
       githubScore: profile.githubScore,
       linkedinScore: profile.linkedinScore,

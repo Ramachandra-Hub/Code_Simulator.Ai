@@ -341,3 +341,13 @@ agentEventBus.on("hackerrank.synced", async (payload) => {
 agentEventBus.on("placement.recompute", async (payload) => {
   if (payload.userId) await recomputePlacementReadiness(payload.userId as string);
 });
+
+agentEventBus.on("panel.completed", async (payload) => {
+  if (payload.userId) {
+    await updateDigitalTwin(payload.userId as string, {
+      type: "panel",
+      source: "panel.completed",
+      data: payload,
+    });
+  }
+});

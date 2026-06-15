@@ -18,13 +18,14 @@ export async function startVoiceInterview(
   userId: string,
   interviewType: InterviewType,
   resumeId?: string,
-  voiceProfile: VoiceProfile | string = "professional"
+  voiceProfile: VoiceProfile | string = "professional",
+  companyPack?: string
 ) {
   if (!isVoiceInterviewType(interviewType)) {
     throw new Error(`Voice mode supports: hr, technical, behavioral, system_design`);
   }
 
-  const interview = await createSession(userId, interviewType, resumeId);
+  const interview = await createSession(userId, interviewType, resumeId, { companyPack });
 
   await prisma.interviewSession.update({
     where: { id: interview.session.id },

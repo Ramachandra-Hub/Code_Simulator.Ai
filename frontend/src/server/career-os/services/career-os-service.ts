@@ -13,6 +13,13 @@ import {
 import { computePlacementPrediction } from "../engines/placement-prediction-engine";
 import { computeLearningVelocity } from "../engines/learning-velocity-engine";
 import { computeFuturePotential } from "../engines/future-potential-engine";
+import {
+  buildPersonalizedCoachMessage,
+  getNextBestActions,
+  getReadinessDelta,
+  getTwinActivityFeed,
+} from "../../career-intelligence/services/twin-activity-service";
+import { getDsaRoadmap } from "../../coding-os/dsa-progress-service";
 
 function startOfDay(d = new Date()): Date {
   const x = new Date(d);
@@ -75,6 +82,35 @@ export async function getCareerOSOverview(userId: string) {
   const future = await computeAndPersistFuturePotential(userId, ctx, velocity.score);
   const predictions = await computeAndPersistPredictions(userId, ctx, velocity.score);
 
+  const [readinessDelta, twinActivity, nextActions, dsa, user, lastInterview] = await Promise.all([
+    getReadinessDelta(userId),
+    getTwinActivityFeed(userId, 6),
+    getNextBestActions(userId),
+    getDsaRoadmap(userId).catch(() => null),
+    prisma.user.findUnique({ where: { id: userId }, select: { name: true } }),
+    prisma.interviewSession.findFirst({
+      where: { userId, status: "completed" },
+      orderBy: { completedAt: "desc" },
+      select: { type: true },
+    }),
+  ]);
+
+  const accepted = await prisma.codeProblemSubmission.count({
+    where: { userId, verdict: "accepted" },
+  });
+
+  const coachMessage = buildPersonalizedCoachMessage({
+    name: user?.name,
+    targetRole: ctx.targetRole,
+    placementReadiness: ctx.placementReadiness,
+    readinessDelta: readinessDelta.delta,
+    weaknesses: ctx.weaknesses,
+    strengths: ctx.strengths,
+    lastInterviewType: lastInterview?.type,
+    problemsSolved: accepted,
+    weakTopics: dsa?.weakAreas,
+  });
+
   const today = startOfDay();
   const [daily, weekly, monthly, activeGoal, milestones] = await Promise.all([
     prisma.dailyMission.findUnique({ where: { userId_date: { userId, date: today } } }),
@@ -99,7 +135,21 @@ export async function getCareerOSOverview(userId: string) {
       strengths: ctx.strengths,
       weaknesses: ctx.weaknesses,
       placementScore: ctx.twin.placementScore,
+      codingReadiness: ctx.twin.codingReadiness,
+      interviewReadiness: ctx.twin.interviewReadiness,
+      panelReadiness: ctx.twin.panelReadiness,
     },
+    readinessDelta,
+    twinActivity,
+    coachMessage,
+    nextBestActions: nextActions,
+    codingOs: dsa
+      ? {
+          weakAreas: dsa.weakAreas,
+          recommendedNext: dsa.recommendedNext,
+          problemsSolved: accepted,
+        }
+      : { problemsSolved: accepted },
   };
 }
 

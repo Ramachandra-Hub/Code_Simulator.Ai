@@ -21,6 +21,7 @@ import { ProductTourHint, SetupChecklist } from "@/components/beta/onboarding-pa
 import { careerOsApi } from "@/lib/career-os-client";
 import { officeApi } from "@/lib/office-client";
 import { ROUTES } from "@/lib/routes";
+import { TwinActivityFeed, NextActionsList } from "@/components/dashboard/twin-activity-feed";
 
 export default function StudentDashboard() {
   const { user } = useCurrentUser();
@@ -46,6 +47,11 @@ export default function StudentDashboard() {
   const forecast = (career?.placementForecast as Array<{ horizonDays?: number; probability?: number }>) || [];
   const todayWork = (office?.todayWork as Array<{ title?: string }>) || [];
   const session = office?.session as { company?: { name?: string }; role?: string } | undefined;
+  const coachMessage = career?.coachMessage as string | undefined;
+  const readinessDelta = career?.readinessDelta as { current: number; delta: number; trend: "up" | "down" | "flat"; previous: number | null } | undefined;
+  const twinActivity = (career?.twinActivity as Array<{ id: string; label: string; at: string; summary?: string; trigger: string }>) || [];
+  const nextActions = (career?.nextBestActions as Array<{ title: string; href: string; priority: string }>) || [];
+  const codingOs = career?.codingOs as { problemsSolved?: number; weakAreas?: string[]; recommendedNext?: { name: string } } | null;
 
   return (
     <>
@@ -91,7 +97,7 @@ export default function StudentDashboard() {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2 text-base">
                 <Sparkles className="h-5 w-5 text-violet-500" />
-                Today&apos;s Career Actions
+                Your AI Career Manager
               </CardTitle>
               <Button asChild variant="ghost" size="sm">
                 <Link href="/career-os?tab=coach">
@@ -99,12 +105,21 @@ export default function StudentDashboard() {
                 </Link>
               </Button>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {!daily && !loading && (
-                <Button onClick={() => careerOsApi.generateMissions().then(load)}>Generate missions</Button>
+            <CardContent className="space-y-4">
+              {coachMessage && (
+                <p className="text-sm leading-relaxed border-l-2 border-violet-500/50 pl-3 text-muted-foreground">
+                  {coachMessage}
+                </p>
               )}
-              <p className="text-sm font-medium">{daily?.title || "No mission yet"}</p>
-              {(daily?.tasks || []).slice(0, 4).map((t, i) => (
+              <TwinActivityFeed activity={twinActivity} readinessDelta={readinessDelta} />
+              <NextActionsList actions={nextActions} />
+              {!daily && !loading && (
+                <Button size="sm" onClick={() => careerOsApi.generateMissions().then(load)}>
+                  Generate today&apos;s missions
+                </Button>
+              )}
+              {daily?.title && <p className="text-sm font-medium">{daily.title}</p>}
+              {(daily?.tasks || []).slice(0, 3).map((t, i) => (
                 <div key={i} className="rounded-lg border border-border/60 px-3 py-2 text-sm">
                   {t.title}
                 </div>
@@ -123,9 +138,25 @@ export default function StudentDashboard() {
               <CardTitle className="text-base">Quick Start</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
+              {codingOs?.recommendedNext && (
+                <p className="text-xs text-muted-foreground mb-2">
+                  Coding focus: <strong>{codingOs.recommendedNext.name}</strong>
+                  {codingOs.problemsSolved != null ? ` · ${codingOs.problemsSolved} solved` : ""}
+                </p>
+              )}
+              <Button asChild className="w-full justify-start" variant="outline">
+                <Link href="/interview?tab=placement">
+                  <Building2 className="mr-2 h-4 w-4" /> Placement Drive
+                </Link>
+              </Button>
               <Button asChild className="w-full justify-start" variant="outline">
                 <Link href="/interview?tab=mock">
                   <Mic className="mr-2 h-4 w-4" /> Mock Interview
+                </Link>
+              </Button>
+              <Button asChild className="w-full justify-start" variant="outline">
+                <Link href={ROUTES.codingOs}>
+                  <Sparkles className="mr-2 h-4 w-4" /> Coding OS
                 </Link>
               </Button>
               <Button asChild className="w-full justify-start" variant="outline">

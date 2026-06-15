@@ -19,7 +19,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     });
 
     void refreshDsaProgress(user.id);
-    void syncCodingTwin(user.id);
+    const twinSync = await syncCodingTwin(user.id);
+    const { agentEventBus } = await import("@/server/core/events/agent-event-bus");
+    void agentEventBus.emit("coding.submitted", {
+      userId: user.id,
+      problemId: id,
+      verdict: result.submission.verdict,
+      passed: result.submission.verdict === "accepted",
+      score: twinSync.codingReadiness,
+      codingReadiness: twinSync.codingReadiness,
+      problemsSolved: twinSync.problemsSolved,
+    });
     const review = await runCodeReview(result.submission.id);
 
     return NextResponse.json({ ...result, review });

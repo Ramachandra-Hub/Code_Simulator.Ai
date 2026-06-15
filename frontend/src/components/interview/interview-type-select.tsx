@@ -13,6 +13,7 @@ import {
 } from "@/lib/resume-store";
 import type { ResumeData } from "@/lib/resume-types";
 import { INTERVIEW_TYPES, PANEL_INTERVIEW_TYPE, VOICE_PROFILES } from "@/lib/interview-types";
+import { COMPANY_INTERVIEW_PACKS } from "@/lib/company-interview-packs";
 import { ROUTES } from "@/lib/routes";
 
 export type InterviewSelectMode = "all" | "mock" | "coding" | "voice" | "panel";
@@ -98,6 +99,17 @@ export function InterviewTypeSelect({ mode = "all" }: InterviewTypeSelectProps) 
     if (mode === "panel") return false;
     return true;
   });
+  const startCompanyMock = (companyId: string) => {
+    if (!resume) {
+      router.push(ROUTES.resumeBuilder);
+      return;
+    }
+    router.push(
+      `${ROUTES.interviewVoice}?type=technical&resume=${resume.id}&voice=${voiceProfile}&company=${companyId}`
+    );
+  };
+
+  const showCompanyPacks = mode === "all" || mode === "mock";
   const showPanel = mode === "all" || mode === "panel";
   const intro =
     mode === "coding"
@@ -166,6 +178,32 @@ export function InterviewTypeSelect({ mode = "all" }: InterviewTypeSelectProps) 
               </CardContent>
             </Card>
           ))}
+        </div>
+      )}
+
+      {showCompanyPacks && (
+        <div className="space-y-3 pt-4 border-t border-border">
+          <p className="text-sm font-semibold">Company-specific mocks</p>
+          <p className="text-xs text-muted-foreground">
+            Questions adapt to company rubric, your resume, and twin weak areas.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {COMPANY_INTERVIEW_PACKS.map((c) => (
+              <Card
+                key={c.id}
+                className="glass-card hover:border-primary/40 cursor-pointer transition-colors"
+                onClick={() => startCompanyMock(c.id)}
+              >
+                <CardContent className="p-4 space-y-2">
+                  <p className="font-semibold">{c.name}</p>
+                  <p className="text-xs text-muted-foreground">{c.tagline}</p>
+                  <Badge variant="outline" className="text-[10px]">
+                    {c.tier}
+                  </Badge>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
       )}
 

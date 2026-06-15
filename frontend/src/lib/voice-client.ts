@@ -19,6 +19,7 @@ export async function startVoiceInterview(input: {
   type: string;
   resumeId?: string;
   voiceProfile?: VoiceProfile;
+  companyPack?: string;
 }) {
   return apiFetch<VoiceStartResult>("/voice/start", {
     method: "POST",

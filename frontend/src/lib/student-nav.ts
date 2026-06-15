@@ -28,6 +28,7 @@ export const STUDENT_PRIMARY_NAV: NavItem[] = [
       { title: "Coding", href: "/interview?tab=coding", icon: "Code2" },
       { title: "Voice", href: "/interview?tab=voice", icon: "Volume2" },
       { title: "Panel", href: "/interview?tab=panel", icon: "Users" },
+      { title: "Placement Drive", href: "/interview?tab=placement", icon: "Building2" },
       { title: "History", href: "/interview?tab=history", icon: "Calendar" },
     ],
   },

@@ -17,7 +17,13 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
-    const result = await startVoiceInterview(user.id, type, body.resumeId, body.voiceProfile || "professional");
+    const result = await startVoiceInterview(
+      user.id,
+      type,
+      body.resumeId,
+      body.voiceProfile || "professional",
+      body.companyPack
+    );
     await trackUsageEvent(ANALYTICS_EVENTS.INTERVIEW_STARTED, user.id, {
       sessionId: result.interviewSessionId,
       type,

@@ -5,9 +5,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { InterviewTypeSelect } from "@/components/interview/interview-type-select";
 import { InterviewHistoryPanel } from "@/components/feature/tab-panels";
+import { PlacementDrivePanel } from "@/components/interview/placement-drive-panel";
 
 const TABS = [
   { id: "mock", label: "Mock" },
+  { id: "placement", label: "Placement Drive" },
   { id: "coding", label: "Coding" },
   { id: "voice", label: "Voice" },
   { id: "panel", label: "Panel" },
@@ -38,6 +40,9 @@ function InterviewHubInner() {
 
       <TabsContent value="mock" className="mt-0">
         <InterviewTypeSelect mode="mock" />
+      </TabsContent>
+      <TabsContent value="placement" className="mt-0">
+        <PlacementDrivePanel />
       </TabsContent>
       <TabsContent value="coding" className="mt-0">
         <InterviewTypeSelect mode="coding" />

@@ -2,6 +2,8 @@ import { prisma } from "../../core/db/prisma";
 import { AgentFactory } from "../../core/agent/agent-factory";
 import { agentEventBus } from "../../core/events/agent-event-bus";
 import { QUESTION_BANK } from "../knowledge/question-bank";
+import { getCompanyPack } from "@/lib/company-interview-packs";
+import { ensureDigitalTwin } from "../memory/digital-twin";
 import { runInterviewTurn } from "../workflows/interview-graph";
 import { createCodingSession } from "./coding-service";
 import type { InterviewType } from "@prisma/client";
@@ -16,6 +18,7 @@ interface SessionMetadata {
   followUpCount: number;
   difficulty: "easy" | "medium" | "hard";
   budgetReached: boolean;
+  companyPack?: string;
 }
 
 function defaultMetadata(type: InterviewType): SessionMetadata {
@@ -40,10 +43,37 @@ async function generateNextQuestion(
   meta: SessionMetadata,
   resume: { targetRole: string; data: unknown } | null,
   userId: string,
-  sessionId: string
+  sessionId: string,
+  twinContext?: { weaknesses: string[]; strengths: string[] }
 ): Promise<string> {
   const targetRole = resume?.targetRole || "Software Engineer";
   const skills = (resume?.data as { skills?: string[] })?.skills || [];
+  const company = meta.companyPack ? getCompanyPack(meta.companyPack) : null;
+  const companyContext = company
+    ? `Company: ${company.name}. Style: ${company.interviewStyle}. Focus: ${company.focusAreas.join(", ")}.`
+    : "";
+
+  const generator = AgentFactory.create("question-generation");
+  const generated = await generator.run(
+    {
+      type: company ? "technical" : type,
+      context: {
+        targetRole,
+        skills,
+        difficulty: meta.difficulty,
+        role: targetRole,
+        weakAreas: twinContext?.weaknesses || [],
+        strengths: twinContext?.strengths || [],
+        companyContext,
+        resumeProjects: JSON.stringify((resume?.data as { projects?: unknown[] })?.projects || []).slice(0, 1500),
+      },
+      asked: meta.asked,
+      bank: meta.questions,
+    },
+    { userId, sessionId }
+  );
+
+  let question = (generated.result as { question: string }).question;
 
   const agentMap: Record<string, string> = {
     hr: "hr-interview",
@@ -55,19 +85,6 @@ async function generateNextQuestion(
     voice: "technical-interview",
     company_specific: "technical-interview",
   };
-
-  const generator = AgentFactory.create("question-generation");
-  const generated = await generator.run(
-    {
-      type,
-      context: { targetRole, skills, difficulty: meta.difficulty, role: targetRole },
-      asked: meta.asked,
-      bank: meta.questions,
-    },
-    { userId, sessionId }
-  );
-
-  let question = (generated.result as { question: string }).question;
 
   if (!question || meta.asked.includes(question)) {
     const interviewer = AgentFactory.create(agentMap[type] || "technical-interview");
@@ -81,12 +98,19 @@ async function generateNextQuestion(
   return question;
 }
 
-export async function createSession(userId: string, type: InterviewType, resumeId?: string) {
+export async function createSession(
+  userId: string,
+  type: InterviewType,
+  resumeId?: string,
+  opts?: { companyPack?: string }
+) {
   const resume = resumeId
     ? await prisma.resume.findFirst({ where: { id: resumeId, userId } })
     : await prisma.resume.findFirst({ where: { userId }, orderBy: { updatedAt: "desc" } });
 
+  const twin = await ensureDigitalTwin(userId);
   const meta = defaultMetadata(type);
+  if (opts?.companyPack) meta.companyPack = opts.companyPack;
   const targetRole = resume?.targetRole || "Software Engineer";
   const tempId = "pending";
   const firstQuestion = await generateNextQuestion(
@@ -94,7 +118,8 @@ export async function createSession(userId: string, type: InterviewType, resumeI
     meta,
     resume ? { targetRole, data: resume.data } : null,
     userId,
-    tempId
+    tempId,
+    { weaknesses: twin.weaknesses, strengths: twin.strengths }
   );
 
   meta.asked.push(firstQuestion);
@@ -249,13 +274,14 @@ export async function submitAnswer(sessionId: string, userId: string, answer: st
     if (nextQuestion && !updatedMeta.asked.includes(nextQuestion)) {
       updatedMeta.asked.push(nextQuestion);
     } else if (!nextQuestion) {
-      // graph could not generate; fall back
+      const twin = await ensureDigitalTwin(userId);
       const fallback = await generateNextQuestion(
         session.type,
         updatedMeta,
         session.resume ? { targetRole: session.resume.targetRole, data: session.resume.data } : null,
         userId,
-        sessionId
+        sessionId,
+        { weaknesses: twin.weaknesses, strengths: twin.strengths }
       );
       nextQuestion = fallback;
       updatedMeta.asked.push(fallback);

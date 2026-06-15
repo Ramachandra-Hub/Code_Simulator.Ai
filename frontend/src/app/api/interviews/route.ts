@@ -21,9 +21,9 @@ export async function POST(req: Request) {
   const user = await getUserFromRequest(req);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
-    const { type, resumeId } = await req.json();
+    const { type, resumeId, companyPack } = await req.json();
     const result = await withPerformance("interview_generation", "/api/interviews", () =>
-      createSession(user.id, type as InterviewType, resumeId),
+      createSession(user.id, type as InterviewType, resumeId, { companyPack }),
       "POST"
     );
     await trackUsageEvent(ANALYTICS_EVENTS.INTERVIEW_STARTED, user.id, {

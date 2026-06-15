@@ -26,6 +26,7 @@ export interface StudentCoachContext {
   linkedinSummary: string;
   leetcodeSummary: string;
   hackerrankSummary: string;
+  codingOsSummary?: string;
   professionalScores: {
     githubScore: number;
     linkedinScore: number;

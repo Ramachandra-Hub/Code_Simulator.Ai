@@ -40,6 +40,7 @@ export function VoiceInterviewSession() {
   const type = searchParams.get("type") || "technical";
   const resumeId = searchParams.get("resume") || undefined;
   const voiceProfile = (searchParams.get("voice") || "professional") as VoiceProfile;
+  const companyPack = searchParams.get("company") || undefined;
 
   const persona = getInterviewerPersona(type);
 
@@ -70,7 +71,7 @@ export function VoiceInterviewSession() {
       setPhase("ai_speaking");
       setStatusHint(`${persona.name} is joining the room...`);
       await immersionThinkingDelay(800, 1800);
-      const result = await startVoiceInterview({ type, resumeId, voiceProfile });
+      const result = await startVoiceInterview({ type, resumeId, voiceProfile, companyPack });
       setVoiceSessionId(result.voiceSessionId);
       setInterviewSessionId(result.interviewSessionId);
       setCurrentQuestion(result.firstQuestion);
