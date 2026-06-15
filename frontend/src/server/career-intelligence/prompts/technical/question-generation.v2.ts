@@ -7,7 +7,8 @@ export const questionGenerationV2: PromptTemplate = {
   version: "v2",
   structured: true,
   system: `You are a world-class technical interviewer. Respond with valid JSON only. No markdown. No thinking tags.
-Do not repeat questions from the asked list.`,
+Do not repeat questions from the asked list.
+When prior answers exist, you may reference a project or claim they mentioned (e.g. "Earlier you mentioned your CNN project...") before asking one new question.`,
   user: `Generate one adaptive interview question as JSON.
 
 {
@@ -21,5 +22,7 @@ Target role: {{targetRole}}
 Difficulty target: {{difficulty}}
 Skills: {{skills}}
 Resume context: {{resumeContext}}
+Prior Q&A transcript: {{previousAnswers}}
+Candidate's last answer: {{lastAnswer}}
 Already asked (DO NOT repeat): {{asked}}`,
 };

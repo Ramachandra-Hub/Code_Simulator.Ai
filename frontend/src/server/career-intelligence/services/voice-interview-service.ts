@@ -6,6 +6,7 @@ import { runVoiceAnalysisAgent } from "../agents/voice-analysis-agent";
 import { createSession, submitAnswer, completeSession } from "./interview-service";
 import { updateDigitalTwin } from "../memory/digital-twin";
 import { withPerformance } from "../../beta/performance-service";
+import { computeInterviewRealismScore } from "./interview-realism";
 
 const VOICE_INTERVIEW_TYPES = new Set<InterviewType>(["hr", "technical", "behavioral", "system_design"]);
 
@@ -185,12 +186,24 @@ export async function processVoiceTranscript(input: {
 
   if (answerResult.phase === "complete") {
     await finalizeVoiceInterview(voiceSession.id, input.userId);
+    const realismScore = computeInterviewRealismScore({
+      followUpCount: answerResult.progress?.followUpCount,
+      turnCount: answerResult.progress?.questionIndex,
+      recentQuestions: nextQuestion ? [nextQuestion] : [],
+    });
     return {
       transcript,
       evaluation: answerResult.evaluation,
       phase: "complete" as const,
       progress: answerResult.progress,
       nextQuestion: null,
+      realism: {
+        interruptions: 0,
+        followUps: answerResult.progress?.followUpCount ?? 0,
+        contextReferences: 0,
+        turnCount: answerResult.progress?.questionIndex ?? 0,
+      },
+      realismScore,
       voiceMetrics: {
         wordsPerMinute: voiceAnalysis.wordsPerMinute,
         fillerCount: voiceAnalysis.fillerCount,
@@ -209,12 +222,25 @@ export async function processVoiceTranscript(input: {
     };
   }
 
+  const realismScore = computeInterviewRealismScore({
+    followUpCount: answerResult.progress?.followUpCount,
+    turnCount: answerResult.progress?.questionIndex,
+    recentQuestions: nextQuestion ? [nextQuestion] : [],
+  });
+
   return {
     transcript,
     evaluation: answerResult.evaluation,
     phase: answerResult.phase,
     progress: answerResult.progress,
     nextQuestion,
+    realism: {
+      interruptions: 0,
+      followUps: answerResult.progress?.followUpCount ?? 0,
+      contextReferences: 0,
+      turnCount: answerResult.progress?.questionIndex ?? 0,
+    },
+    realismScore,
     voiceMetrics: {
       wordsPerMinute: voiceAnalysis.wordsPerMinute,
       fillerCount: voiceAnalysis.fillerCount,

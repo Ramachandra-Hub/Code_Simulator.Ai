@@ -1,6 +1,6 @@
 import type { NavItem } from "./types";
 
-/** Simplified 5-pillar student navigation (UX Sprint). */
+/** Career OS — 4-pillar student navigation (no mock learning tabs). */
 export const STUDENT_PRIMARY_NAV: NavItem[] = [
   {
     title: "Home",
@@ -8,29 +8,15 @@ export const STUDENT_PRIMARY_NAV: NavItem[] = [
     icon: "LayoutDashboard",
   },
   {
-    title: "Learning",
-    href: "/learn",
-    icon: "GraduationCap",
-    children: [
-      { title: "Courses", href: "/learn?tab=courses", icon: "BookOpen" },
-      { title: "Learning Paths", href: "/learn?tab=paths", icon: "GitBranch" },
-      { title: "Coding Lab", href: "/coding", icon: "Code2" },
-      { title: "DSA Practice", href: "/dsa", icon: "GitBranch" },
-      { title: "Assessments", href: "/assessments", icon: "ClipboardCheck" },
-    ],
-  },
-  {
     title: "Career",
     href: "/career-os",
     icon: "Rocket",
     children: [
-      { title: "Career Coach", href: "/career-os", icon: "Sparkles" },
-      { title: "Goals & Missions", href: "/career-os/goals", icon: "Trophy" },
-      { title: "Resume Builder", href: "/resume", icon: "FileText" },
-      { title: "ATS Analyzer", href: "/ats", icon: "ScanSearch" },
-      { title: "Intelligence Profile", href: "/twin", icon: "Activity" },
-      { title: "Portfolio", href: "/portfolio", icon: "Briefcase" },
-      { title: "Placements", href: "/placements", icon: "Building2" },
+      { title: "Career Coach", href: "/career-os?tab=coach", icon: "Sparkles" },
+      { title: "Resume", href: "/career-os?tab=resume", icon: "FileText" },
+      { title: "ATS", href: "/career-os?tab=ats", icon: "ScanSearch" },
+      { title: "Digital Twin", href: "/career-os?tab=twin", icon: "Activity" },
+      { title: "Reports", href: "/career-os?tab=reports", icon: "BarChart3" },
     ],
   },
   {
@@ -38,8 +24,23 @@ export const STUDENT_PRIMARY_NAV: NavItem[] = [
     href: "/interview",
     icon: "Mic",
     children: [
-      { title: "Start Interview", href: "/interview?tab=start", icon: "Mic" },
-      { title: "Past Sessions", href: "/interview?tab=history", icon: "Calendar" },
+      { title: "Mock", href: "/interview?tab=mock", icon: "Mic" },
+      { title: "Coding", href: "/interview?tab=coding", icon: "Code2" },
+      { title: "Voice", href: "/interview?tab=voice", icon: "Volume2" },
+      { title: "Panel", href: "/interview?tab=panel", icon: "Users" },
+      { title: "History", href: "/interview?tab=history", icon: "Calendar" },
+    ],
+  },
+  {
+    title: "Coding OS",
+    href: "/coding-os",
+    icon: "Code2",
+    children: [
+      { title: "Practice", href: "/coding-os?tab=practice", icon: "Code2" },
+      { title: "DSA Roadmap", href: "/coding-os?tab=dsa", icon: "GitBranch" },
+      { title: "SQL Lab", href: "/coding-os?tab=sql", icon: "Database" },
+      { title: "Contests", href: "/coding-os?tab=contests", icon: "Trophy" },
+      { title: "AI Mentor", href: "/coding-os?tab=mentor", icon: "Bot" },
     ],
   },
   {
@@ -47,17 +48,15 @@ export const STUDENT_PRIMARY_NAV: NavItem[] = [
     href: "/office",
     icon: "Building2",
     badge: "Sim",
-    children: [
-      { title: "Office Overview", href: "/office", icon: "Building2" },
-      { title: "Today's Work", href: "/office/work", icon: "ClipboardCheck" },
-      { title: "Meetings", href: "/office/meetings", icon: "Calendar" },
-      { title: "Performance", href: "/office/performance", icon: "BarChart3" },
-    ],
   },
 ];
 
-/** Routes removed from primary nav — still accessible via search, journey, or deep links. */
+/** Deep links only — hidden from primary nav. */
 export const STUDENT_SECONDARY_ROUTES = [
+  "/learn",
+  "/assessments",
+  "/portfolio",
+  "/placements",
   "/projects",
   "/ai-coach",
   "/analytics",
@@ -69,20 +68,16 @@ export const STUDENT_SECONDARY_ROUTES = [
 
 export function matchStudentNavSection(pathname: string): string | null {
   if (pathname.startsWith("/dashboard/student")) return "/dashboard/student";
-  if (pathname.startsWith("/learn") || pathname.startsWith("/coding") || pathname.startsWith("/dsa") || pathname.startsWith("/assessments")) {
-    return "/learn";
-  }
   if (
     pathname.startsWith("/career-os") ||
     pathname.startsWith("/resume") ||
     pathname.startsWith("/ats") ||
-    pathname.startsWith("/twin") ||
-    pathname.startsWith("/portfolio") ||
-    pathname.startsWith("/placements")
+    pathname.startsWith("/twin")
   ) {
     return "/career-os";
   }
   if (pathname.startsWith("/interview")) return "/interview";
+  if (pathname.startsWith("/coding-os")) return "/coding-os";
   if (pathname.startsWith("/office")) return "/office";
   return null;
 }

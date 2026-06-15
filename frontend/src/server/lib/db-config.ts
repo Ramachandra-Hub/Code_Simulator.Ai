@@ -14,13 +14,12 @@ export function getDatabaseConfigError(): string | null {
     return "DATABASE_URL uses db.*.supabase.co which is IPv6-only. Vercel needs the Supabase pooler URL from Dashboard → Connect → Session pooler.";
   }
 
-  if (
-    process.env.VERCEL &&
-    url.includes("pooler.supabase.com") &&
-    !url.includes(`postgres.${process.env.SUPABASE_PROJECT_REF || ""}`) &&
-    !url.includes("options=reference")
-  ) {
-    return "DATABASE_URL username must be postgres.PROJECT_REF. Copy the Session pooler URI from Supabase → Connect for project " + (process.env.SUPABASE_PROJECT_REF || "your project") + ".";
+  if (process.env.VERCEL && url.includes("pooler.supabase.com")) {
+    const userMatch = url.match(/postgresql:\/\/([^:]+):/);
+    const user = userMatch?.[1] || "";
+    if (user === "postgres" && !url.includes("options=reference")) {
+      return "DATABASE_URL username must be postgres.PROJECT_REF (e.g. postgres.pdnvvcwfqqybfxadpora). Copy the Session pooler URI from Supabase → Connect.";
+    }
   }
 
   const placeholder = /postgres:(YOUR_DB_PASSWORD|\[YOUR_PASSWORD\])@/;

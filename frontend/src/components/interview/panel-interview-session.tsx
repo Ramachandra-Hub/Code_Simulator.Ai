@@ -14,6 +14,8 @@ import { startPanelInterview, submitPanelTranscript, type PanelMemberInfo } from
 import { speakPanelTurn } from "@/lib/panel-voices";
 import { ROUTES } from "@/lib/routes";
 import { loadVoices, stopNaturalSpeech } from "@/lib/natural-speech";
+import { PANEL_PERSONALITY_BY_PERSONA, pickThinkingMessage } from "@/lib/interview-personas";
+import { InterviewRealismTracker, immersionThinkingDelay, detectContextReference } from "@/lib/interview-immersion";
 
 function entryId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -42,6 +44,9 @@ export function PanelInterviewSession() {
   const [creating, setCreating] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [interrupted, setInterrupted] = useState(false);
+  const [realismTracker] = useState(() => new InterviewRealismTracker());
+  const [realismScore, setRealismScore] = useState(0);
+  const [thinkingStatus, setThinkingStatus] = useState<string | undefined>();
 
   const playPanelistQuestion = useCallback(
     async (opts: {
@@ -56,6 +61,7 @@ export function PanelInterviewSession() {
       setCurrentQuestion(opts.question);
       setSpokenAnswer("");
       setLiveSpeech("");
+      await immersionThinkingDelay(600, 1600);
 
       await speakPanelTurn({
         moderatorMessage: opts.moderatorMessage,
@@ -159,8 +165,10 @@ export function PanelInterviewSession() {
     }
 
     setPhase("processing");
-    setStatusHint("Panel is listening to your answer...");
+    setThinkingStatus(pickThinkingMessage());
+    setStatusHint("Panel is reviewing your answer...");
     setLiveSpeech("");
+    await immersionThinkingDelay();
     setTranscript((prev) => [
       ...prev,
       { id: entryId(), role: "student", kind: "answer", text: trimmed, speaker: "You", timestamp: new Date().toISOString() },
@@ -193,6 +201,11 @@ export function PanelInterviewSession() {
       );
       setInterrupted(result.interrupted);
       setSpokenAnswer("");
+      realismTracker.recordTurn();
+      if (result.interrupted) realismTracker.recordInterruption();
+      if (result.realism) realismTracker.merge(result.realism);
+      if (result.realismScore != null) setRealismScore(result.realismScore);
+      else setRealismScore(realismTracker.getScore());
 
       if (result.interrupted) {
         toast({ title: "Panel interruption", description: "A panelist is redirecting the discussion", variant: "error" });
@@ -206,6 +219,9 @@ export function PanelInterviewSession() {
       }
 
       if (result.nextQuestion) {
+        if (detectContextReference(result.nextQuestion)) {
+          realismTracker.recordQuestion(result.nextQuestion);
+        }
         setTranscript((prev) => [
           ...prev,
           {
@@ -222,6 +238,7 @@ export function PanelInterviewSession() {
           speaker: result.activeSpeaker,
           tts: result.tts,
         });
+        setThinkingStatus(undefined);
       } else {
         setPhase("your_turn");
       }
@@ -262,16 +279,23 @@ export function PanelInterviewSession() {
       <div className="lg:col-span-2 space-y-4">
         <AIMeetingRoom
           title="Panel Interview Room"
-          participants={panel.map((m) => ({
-            id: m.id,
-            name: m.name,
-            role: m.role,
-            isInterviewer: true,
-          }))}
+          participants={panel.map((m) => {
+            const traits = PANEL_PERSONALITY_BY_PERSONA[m.persona] || PANEL_PERSONALITY_BY_PERSONA.hr;
+            return {
+              id: m.id,
+              name: m.name,
+              role: m.role,
+              isInterviewer: true,
+              personality: traits.personality,
+              personalityLabel: traits.personalityLabel,
+            };
+          })}
           activeSpeakerId={activeSpeaker?.id || null}
           phase={meetingPhase}
           currentQuestion={currentQuestion}
           statusHint={statusHint}
+          thinkingStatus={thinkingStatus}
+          realismScore={realismScore}
           progress={{ current: progress.turnCount + 1, total: progress.maxTurns }}
           spokenAnswer={spokenAnswer}
           liveSpeech={yourTurn ? liveSpeech : ""}
@@ -279,9 +303,9 @@ export function PanelInterviewSession() {
           onSpeechError={(msg) => toast({ title: "Voice input", description: msg, variant: "error" })}
           onSubmit={() => void handleAnswer()}
           submitDisabled={submitting || displayAnswer.trim().length < 10}
+          transcriptPanel={<TranscriptPanel entries={transcript} liveSpeech={yourTurn ? liveSpeech : ""} />}
         />
         {interrupted && <p className="text-xs text-amber-600 text-center">Panel interrupted — expect a direct follow-up</p>}
-        <TranscriptPanel entries={transcript} liveSpeech={yourTurn ? liveSpeech : ""} />
       </div>
 
       <div className="space-y-4">

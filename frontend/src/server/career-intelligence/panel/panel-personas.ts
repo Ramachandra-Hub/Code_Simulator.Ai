@@ -1,4 +1,6 @@
-/** MNC-style panel composition for PR-9 */
+/** MNC-style panel composition — human names & distinct personalities */
+
+import type { InterviewerPersonality } from "@/lib/interview-personas";
 
 export interface PanelPersonaConfig {
   persona: string;
@@ -6,6 +8,7 @@ export interface PanelPersonaConfig {
   role: string;
   voiceId: string;
   personality: string;
+  personalityType: InterviewerPersonality;
   expertise: string[];
   questioningStyle: string;
   agentId: string;
@@ -14,40 +17,44 @@ export interface PanelPersonaConfig {
 export const MNC_PANEL_ROSTER: PanelPersonaConfig[] = [
   {
     persona: "hr",
-    name: "Emily Watson",
-    role: "HR Business Partner",
+    name: "Sarah Johnson",
+    role: "HR Manager",
     voiceId: "panel_hr_female",
-    personality: "Warm, structured, culture-focused",
+    personality: "Warm, welcoming, culture-focused",
+    personalityType: "friendly",
     expertise: ["culture fit", "motivation", "career goals", "values alignment"],
     questioningStyle: "Open-ended behavioral with culture probes",
     agentId: "hr-interview",
   },
   {
     persona: "technical_lead",
-    name: "Sarah Chen",
-    role: "Technical Lead",
+    name: "David Kumar",
+    role: "Senior Software Engineer",
     voiceId: "panel_tech_lead",
-    personality: "Analytical, detail-oriented, probing",
+    personality: "Analytical, precise, depth-oriented",
+    personalityType: "technical",
     expertise: ["system design", "code quality", "architecture", "debugging"],
     questioningStyle: "Deep technical follow-ups and trade-off challenges",
     agentId: "technical-interview",
   },
   {
     persona: "engineering_manager",
-    name: "Raj Patel",
+    name: "Michael Torres",
     role: "Engineering Manager",
     voiceId: "panel_em_male",
-    personality: "Pragmatic, delivery-focused, leadership-minded",
+    personality: "Direct, accountability-focused, high standards",
+    personalityType: "strict",
     expertise: ["team leadership", "delivery", "conflict resolution", "prioritization"],
-    questioningStyle: "STAR behavioral with ownership and impact focus",
+    questioningStyle: "STAR behavioral with ownership probes; cross-examines technical claims",
     agentId: "behavioral-interview",
   },
   {
     persona: "director",
-    name: "Priya Sharma",
+    name: "Elena Vasquez",
     role: "Director of Engineering",
     voiceId: "panel_director_female",
-    personality: "Strategic, executive, high-pressure",
+    personality: "Strategic, executive-minded, big-picture",
+    personalityType: "strategic",
     expertise: ["stakeholder management", "strategy", "scaling", "executive communication"],
     questioningStyle: "Big-picture challenges and executive summaries",
     agentId: "behavioral-interview",
@@ -58,6 +65,7 @@ export const MNC_PANEL_ROSTER: PanelPersonaConfig[] = [
     role: "Senior Technical Recruiter",
     voiceId: "panel_recruiter_male",
     personality: "Direct, evaluative, communication-focused",
+    personalityType: "neutral",
     expertise: ["communication", "role fit", "salary expectations", "candidate narrative"],
     questioningStyle: "Concise probes on clarity and role alignment",
     agentId: "hr-interview",

@@ -61,7 +61,7 @@ function pickByExpertise(panel: ModeratorInput["panel"], answer: string): (typeo
   return null;
 }
 
-/** PanelModeratorAgent — turn order, interruptions, speaker selection, flow */
+/** PanelModeratorAgent — turn order, interruptions, speaker selection, cross-questioning */
 export function runPanelModerator(input: ModeratorInput): ModeratorDecision {
   const { panel, answer, answerScore = 60, turnCount, maxTurns, recentTranscript } = input;
   if (!panel.length) throw new Error("Empty panel");
@@ -69,6 +69,7 @@ export function runPanelModerator(input: ModeratorInput): ModeratorDecision {
   const weakAnswer = answerScore < 55 || answer.trim().split(/\s+/).length < 15;
   const strongAnswer = answerScore >= 80;
   const lastAiSpeaker = [...recentTranscript].reverse().find((t) => t.role === "ai")?.speaker;
+  const lastAiPersona = panel.find((p) => p.name === lastAiSpeaker)?.persona;
 
   let action: ModeratorAction = "question";
   let interrupted = false;
@@ -81,10 +82,23 @@ export function runPanelModerator(input: ModeratorInput): ModeratorDecision {
   } else if (strongAnswer && Math.random() < 0.35) {
     action = "challenge";
     reason = "Panel challenges a strong claim for deeper validation";
-  } else if (turnCount > 2 && Math.random() < 0.3) {
+  } else if (lastAiPersona === "technical_lead" && turnCount > 1 && Math.random() < 0.55) {
+    const manager = panel.find((p) => p.persona === "engineering_manager");
+    if (manager) {
+      action = "cross_question";
+      reason = "Manager cross-examines after technical lead's question";
+      return {
+        nextSpeakerId: manager.id,
+        nextSpeakerPersona: manager.persona,
+        action,
+        reason,
+        interrupted: false,
+      };
+    }
+  } else if (turnCount > 2 && Math.random() < 0.35) {
     action = "cross_question";
     reason = "Cross-question referencing earlier response";
-  } else if (turnCount > 0 && Math.random() < 0.25) {
+  } else if (turnCount > 0 && Math.random() < 0.28) {
     action = "follow_up";
     reason = "Follow-up on the same topic";
   }
@@ -134,14 +148,20 @@ export function buildPanelQuestionPrompt(opts: {
   answer: string;
   recentTranscript: string;
   interrupted: boolean;
+  earlierSnippet?: string | null;
 }): string {
   const actionGuide: Record<ModeratorAction, string> = {
     question: "Ask a new interview question appropriate to your role.",
     follow_up: "Ask a sharp follow-up on the candidate's last answer.",
     interrupt: "Politely interrupt and redirect — the answer was vague. Ask for specifics.",
     challenge: "Challenge the candidate's claim. Ask for metrics, trade-offs, or evidence.",
-    cross_question: "Reference something said earlier in the transcript and cross-examine consistency.",
+    cross_question:
+      "Reference something the candidate said earlier in the transcript. Example opener: 'Earlier you mentioned your CNN project...' Then ask one focused question.",
   };
+
+  const contextLine = opts.earlierSnippet
+    ? `Earlier answer snippet to reference: "${opts.earlierSnippet}"`
+    : "";
 
   return [
     `You are ${opts.persona.name}, ${opts.persona.role} on an MNC panel interview.`,
@@ -151,9 +171,11 @@ export function buildPanelQuestionPrompt(opts: {
     `Target role: ${opts.targetRole}`,
     `Action: ${actionGuide[opts.action]}`,
     opts.interrupted ? "Note: You are interrupting the candidate." : "",
+    contextLine,
     `Recent transcript:\n${opts.recentTranscript}`,
     `Candidate's last answer: ${opts.answer}`,
     "Respond with exactly ONE interview question only.",
+    "When cross-questioning, explicitly reference prior answers (projects, claims, or metrics).",
     "Rules: one question mark maximum, no bullet points, no markdown, no hashtags, no asterisks, no numbered lists, no multiple questions.",
     "Wait for the candidate to answer before another panelist speaks.",
     "Plain spoken English only, 1 to 2 short sentences.",

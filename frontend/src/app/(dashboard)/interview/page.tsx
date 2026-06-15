@@ -2,39 +2,31 @@
 
 import { Suspense } from "react";
 import { Mic } from "lucide-react";
-import { InteractiveModulePage } from "@/components/feature/interactive-module-page";
-import { InterviewTypeSelect } from "@/components/interview/interview-type-select";
-import { InterviewHistoryPanel } from "@/components/feature/tab-panels";
-import { StudentJourney } from "@/components/dashboard/student-journey";
-import { ROUTES } from "@/lib/routes";
+import { InterviewHub } from "@/components/interview/interview-hub";
 
-function InterviewContent() {
+function InterviewPageContent() {
   return (
     <div className="space-y-6">
-      <StudentJourney currentStepId="interview" completedStepIds={["learning", "assessment", "resume"]} />
-      <InteractiveModulePage
-      title="AI Mock Interview"
-      subtitle="Practice HR, technical, and panel interviews by speaking — AI listens and responds with natural voices."
-      icon={Mic}
-      gradient="from-indigo-600 via-purple-600 to-pink-600"
-      defaultTab="start"
-      actions={[
-        { label: "Start Interview", href: ROUTES.interviewStart },
-        { label: "Past Sessions", href: ROUTES.interviewHistory },
-      ]}
-      tabs={[
-        { id: "start", label: "Start", content: <InterviewTypeSelect /> },
-        { id: "history", label: "History", content: <InterviewHistoryPanel /> },
-      ]}
-      sections={[
-        { title: "Types", description: "Interview modes.", items: ["HR", "Technical", "Coding", "System Design", "Behavioral"] },
-        { title: "Evaluation", description: "AI feedback.", items: ["Communication", "Confidence", "Technical Knowledge", "Fluency"], badge: "AI" },
-      ]}
-    />
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600">
+          <Mic className="h-5 w-5 text-white" />
+        </div>
+        <div>
+          <h2 className="text-lg font-semibold">Interview Room</h2>
+          <p className="text-sm text-muted-foreground">
+            Mock, coding, voice, and panel modes — questions generated from your resume, role, and twin
+          </p>
+        </div>
+      </div>
+      <InterviewHub />
     </div>
   );
 }
 
 export default function InterviewPage() {
-  return <Suspense fallback={<div className="p-6">Loading...</div>}><InterviewContent /></Suspense>;
+  return (
+    <Suspense fallback={<div className="p-6">Loading...</div>}>
+      <InterviewPageContent />
+    </Suspense>
+  );
 }

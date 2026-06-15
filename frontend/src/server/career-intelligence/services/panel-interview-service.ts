@@ -8,6 +8,7 @@ import { buildModeratorReport, type PanelistEvaluation } from "../evaluators/pan
 import { getOpeningPanelMessage, runPanelTurnGraph } from "../workflows/panel-graph";
 import { normalizePanelQuestion } from "@/lib/speech-sanitize";
 import { completeSession } from "./interview-service";
+import { computeInterviewRealismScore } from "./interview-realism";
 
 const MAX_PANEL_TURNS = 8;
 
@@ -260,6 +261,17 @@ export async function submitPanelAnswer(input: {
     await finalizePanelInterview(panelSession.id, input.userId);
   }
 
+  const aiQuestions = session.turns
+    .filter((t) => t.role === "ai")
+    .map((t) => t.content)
+    .concat(nextQuestion ? [nextQuestion] : []);
+  const realismScore = computeInterviewRealismScore({
+    followUpCount: turnResult.decision.action === "follow_up" ? 1 : 0,
+    interruptionCount: newInterruptions,
+    turnCount: newTurnCount,
+    recentQuestions: aiQuestions.slice(-6),
+  });
+
   return {
     evaluation: turnResult.answerAnalysis,
     panelistFeedback: turnResult.evaluation,
@@ -275,6 +287,13 @@ export async function submitPanelAnswer(input: {
     phase: isComplete ? "complete" : "your_turn",
     progress: { turnCount: newTurnCount, maxTurns: panelSession.maxTurns },
     tts,
+    realism: {
+      interruptions: newInterruptions,
+      followUps: turnResult.decision.action === "follow_up" ? 1 : 0,
+      contextReferences: turnResult.decision.action === "cross_question" ? 1 : 0,
+      turnCount: newTurnCount,
+    },
+    realismScore,
   };
 }
 

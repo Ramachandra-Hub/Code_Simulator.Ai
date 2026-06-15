@@ -8,10 +8,12 @@ const JUDGE0_REQUIRE =
 const LANGUAGE_IDS: Record<string, number> = {
   python: 71,
   javascript: 63,
+  typescript: 74,
   java: 62,
   cpp: 54,
   c: 50,
   csharp: 51,
+  sql: 82,
 };
 
 export interface Judge0Result {

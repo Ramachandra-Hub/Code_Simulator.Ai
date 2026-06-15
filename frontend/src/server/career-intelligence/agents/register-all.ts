@@ -319,6 +319,8 @@ const agents = [
       difficulty: (context.difficulty as string) || "medium",
       skills: JSON.stringify(context.skills || []),
       resumeContext: JSON.stringify(context).slice(0, 2000),
+      previousAnswers: JSON.stringify(context.previousAnswers || []).slice(0, 2500),
+      lastAnswer: (context.lastAnswer as string) || "",
       asked: JSON.stringify([...asked]),
     };
 
@@ -605,6 +607,34 @@ const agents = [
       confidence: 0.95,
       handoff: { targetAgentId: targetAgent, payload: input },
     };
+  }),
+
+  // Coding OS (48-50)
+  agent("problem-generation", "ProblemGenerationAgent", "Generate unique coding problems from student profile", "coding", ["digital-twin", "prompt-registry", "question-bank"], ["personalization", "company-targeting"], async (input, ctx) => {
+    if (!ctx.userId) throw new Error("userId required");
+    const { generateAndStoreProblem } = await import("@/server/coding-os/problem-generation-service");
+    const problem = await generateAndStoreProblem({
+      userId: ctx.userId,
+      targetCompany: input.targetCompany as string | undefined,
+      category: input.category as import("@prisma/client").CodeProblemCategory | undefined,
+      difficulty: input.difficulty as import("@prisma/client").CodeDifficulty | undefined,
+    });
+    return { result: { problemId: problem.id, slug: problem.slug, title: problem.title }, confidence: 0.88 };
+  }),
+
+  agent("code-review", "CodeReviewAgent", "AI code review after submission", "coding", ["prompt-registry", "heuristic-scorer"], ["readability", "complexity", "best-practices"], async (input) => {
+    const { runCodeReview } = await import("@/server/coding-os/code-review-service");
+    const report = await runCodeReview(input.submissionId as string);
+    return { result: report, confidence: 0.85 };
+  }),
+
+  agent("coding-mentor", "CodingMentorAgent", "Explain problems and build practice plans", "coding", ["digital-twin", "prompt-registry"], ["mentorship", "roadmap"], async (input, _ctx, complete) => {
+    const problem = input.problem ? JSON.stringify(input.problem) : "general practice";
+    const reply = await complete(
+      `Mode: ${input.mode || "explain"}. Student: ${input.message}. Problem context: ${problem}. Weak areas: ${JSON.stringify(input.weakAreas || [])}. Recommended next topic: ${JSON.stringify(input.recommendedNext || null)}.`,
+      "You are a supportive coding mentor. Explain approaches, time/space complexity, and study plans. Do not paste full solutions unless the student explicitly asks."
+    );
+    return { result: { reply }, confidence: 0.9 };
   }),
 ];
 

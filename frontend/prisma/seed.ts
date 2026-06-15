@@ -1,5 +1,6 @@
 import { PrismaClient, UserRole } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { seedCodingOs } from "./seed-coding-os";
 
 const prisma = new PrismaClient();
 
@@ -56,6 +57,7 @@ async function main() {
   }
 
   console.log("Seed complete:", demos.length, "users,", questions.length, "questions");
+  await seedCodingOs();
 }
 
 main()

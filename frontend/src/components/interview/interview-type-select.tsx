@@ -15,7 +15,13 @@ import type { ResumeData } from "@/lib/resume-types";
 import { INTERVIEW_TYPES, PANEL_INTERVIEW_TYPE, VOICE_PROFILES } from "@/lib/interview-types";
 import { ROUTES } from "@/lib/routes";
 
-export function InterviewTypeSelect() {
+export type InterviewSelectMode = "all" | "mock" | "coding" | "voice" | "panel";
+
+interface InterviewTypeSelectProps {
+  mode?: InterviewSelectMode;
+}
+
+export function InterviewTypeSelect({ mode = "all" }: InterviewTypeSelectProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const resumeParam = searchParams.get("resume");
@@ -85,6 +91,21 @@ export function InterviewTypeSelect() {
     );
   }
 
+  const showVoicePicker = mode === "all" || mode === "mock" || mode === "voice";
+  const types = INTERVIEW_TYPES.filter((t) => {
+    if (mode === "coding") return t.id === "coding";
+    if (mode === "mock" || mode === "voice") return t.id !== "coding";
+    if (mode === "panel") return false;
+    return true;
+  });
+  const showPanel = mode === "all" || mode === "panel";
+  const intro =
+    mode === "coding"
+      ? "Start a live coding round — problems are generated from your resume and target role."
+      : mode === "panel"
+        ? "Multi-interviewer panel with distinct voices. Questions adapt to your resume and prior answers."
+        : "Select an interview type. Speak your answers in Chrome or Edge with your microphone enabled.";
+
   return (
     <div className="space-y-6">
       <Card className="glass-card border-primary/20">
@@ -104,72 +125,81 @@ export function InterviewTypeSelect() {
         </CardContent>
       </Card>
 
-      <p className="text-sm text-muted-foreground text-center">
-        Select an interview type. You will speak your answers — use Chrome or Edge with your microphone enabled.
-      </p>
+      <p className="text-sm text-muted-foreground text-center">{intro}</p>
 
-      <div className="flex items-center justify-center gap-2 flex-wrap">
-        <span className="text-xs text-muted-foreground">Interviewer voice:</span>
-        {VOICE_PROFILES.map((v) => (
-          <Button
-            key={v.id}
-            size="sm"
-            variant={voiceProfile === v.id ? "default" : "outline"}
-            onClick={() => setVoiceProfile(v.id)}
-          >
-            {v.label}
-          </Button>
-        ))}
-      </div>
+      {showVoicePicker && (
+        <div className="flex items-center justify-center gap-2 flex-wrap">
+          <span className="text-xs text-muted-foreground">Interviewer voice:</span>
+          {VOICE_PROFILES.map((v) => (
+            <Button
+              key={v.id}
+              size="sm"
+              variant={voiceProfile === v.id ? "default" : "outline"}
+              onClick={() => setVoiceProfile(v.id)}
+            >
+              {v.label}
+            </Button>
+          ))}
+        </div>
+      )}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {INTERVIEW_TYPES.map((t) => (
+      {types.length > 0 && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {types.map((t) => (
+            <Card
+              key={t.id}
+              className="glass-card hover:shadow-glass-lg transition-all cursor-pointer group"
+              onClick={() => startInterview(t.id)}
+            >
+              <CardContent className="p-6 space-y-3">
+                <div className="flex justify-between items-start">
+                  <p className="font-semibold group-hover:text-primary transition-colors">{t.label}</p>
+                  <Badge variant="secondary" className="text-xs">
+                    {t.id === "coding" ? "Code" : mode === "voice" ? "Voice" : "Mock"}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">{t.description}</p>
+                <p className="text-xs text-muted-foreground">{t.duration}</p>
+                <Button size="sm" className="w-full mt-2" variant="outline">
+                  <Play className="mr-2 h-4 w-4" /> {t.id === "coding" ? "Start Coding" : "Start Interview"}
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {showPanel && (
+        <div className="space-y-3 pt-4 border-t border-border">
+          <div className="text-sm font-semibold flex items-center gap-2">
+            Panel Interview
+            <Badge variant="secondary" className="text-xs">
+              Multi-voice
+            </Badge>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            MNC-style panel with 5 distinct voices — HR, Technical Lead, Engineering Manager, Director, and Recruiter.
+          </p>
           <Card
-            key={t.id}
-            className="glass-card hover:shadow-glass-lg transition-all cursor-pointer group"
-            onClick={() => startInterview(t.id)}
+            className="glass-card hover:shadow-glass-lg transition-all cursor-pointer border-violet-500/30 group max-w-xl"
+            onClick={startPanelInterview}
           >
             <CardContent className="p-6 space-y-3">
               <div className="flex justify-between items-start">
-                <p className="font-semibold group-hover:text-primary transition-colors">{t.label}</p>
-                <Badge variant="secondary" className="text-xs">{t.id === "coding" ? "Code" : "Voice"}</Badge>
+                <p className="font-semibold group-hover:text-primary transition-colors">{PANEL_INTERVIEW_TYPE.label}</p>
+                <Badge className="text-xs">Panel + Voice</Badge>
               </div>
-              <p className="text-xs text-muted-foreground">{t.description}</p>
-              <p className="text-xs text-muted-foreground">{t.duration}</p>
-              <Button size="sm" className="w-full mt-2" variant="outline">
-                <Play className="mr-2 h-4 w-4" /> {t.id === "coding" ? "Start Coding" : "Start Speaking"}
+              <p className="text-xs text-muted-foreground">{PANEL_INTERVIEW_TYPE.description}</p>
+              <p className="text-xs text-muted-foreground">
+                {PANEL_INTERVIEW_TYPE.duration} · {PANEL_INTERVIEW_TYPE.questionCount} turns
+              </p>
+              <Button size="sm" className="w-full mt-2" variant="gradient">
+                <Play className="mr-2 h-4 w-4" /> Start Panel Interview
               </Button>
             </CardContent>
           </Card>
-        ))}
-      </div>
-
-      <div className="space-y-3 pt-4 border-t border-border">
-        <div className="text-sm font-semibold flex items-center gap-2">
-          Panel Interview
-          <Badge variant="secondary" className="text-xs">Multi-voice</Badge>
         </div>
-        <p className="text-xs text-muted-foreground">
-          MNC-style panel with 5 distinct human-like voices — HR, Technical Lead, Engineering Manager, Director, and Recruiter. Speak your answers; each panelist has a unique voice.
-        </p>
-        <Card
-          className="glass-card hover:shadow-glass-lg transition-all cursor-pointer border-violet-500/30 group max-w-xl"
-          onClick={startPanelInterview}
-        >
-          <CardContent className="p-6 space-y-3">
-            <div className="flex justify-between items-start">
-              <p className="font-semibold group-hover:text-primary transition-colors">{PANEL_INTERVIEW_TYPE.label}</p>
-              <Badge className="text-xs">Panel + Voice</Badge>
-            </div>
-            <p className="text-xs text-muted-foreground">{PANEL_INTERVIEW_TYPE.description}</p>
-            <p className="text-xs text-muted-foreground">{PANEL_INTERVIEW_TYPE.duration} · {PANEL_INTERVIEW_TYPE.questionCount} turns</p>
-            <Button size="sm" className="w-full mt-2" variant="gradient">
-              <Play className="mr-2 h-4 w-4" /> Start Panel Interview
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-
+      )}
     </div>
   );
 }

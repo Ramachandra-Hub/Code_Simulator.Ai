@@ -50,6 +50,8 @@ export async function submitPanelTranscript(input: {
     interrupted: boolean;
     panelistFeedback: { feedback: string; hiringRecommendation: string };
     tts: { audioBase64: string | null; useBrowserFallback: boolean; voiceId: string; speaker: string } | null;
+    realism?: { interruptions: number; followUps: number; contextReferences: number; turnCount: number };
+    realismScore?: number;
   }>("/panel/transcript", { method: "POST", body: JSON.stringify(input) });
 }
 

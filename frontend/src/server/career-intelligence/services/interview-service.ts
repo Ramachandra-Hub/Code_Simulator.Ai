@@ -163,10 +163,14 @@ export async function submitAnswer(sessionId: string, userId: string, answer: st
   });
 
   const resumeData = session.resume?.data as { skills?: string[]; targetRole?: string } | undefined;
-  const keywords = [
-    ...(resumeData?.skills || []),
-    session.targetRole || "",
-  ].filter(Boolean);
+  const keywords = [...(resumeData?.skills || []), session.targetRole || ""].filter(Boolean);
+  const previousAnswers = session.turns
+    .filter((t) => t.role === "student")
+    .map((t, idx) => {
+      const aiTurns = session.turns.filter((x) => x.role === "ai");
+      const q = aiTurns[idx + 1]?.content || aiTurns[idx]?.content || "";
+      return { question: q, answer: t.content };
+    });
 
   // Run the LangGraph interview turn: analyze -> decide -> (follow_up | next_question | complete)
   const turnResult = await runInterviewTurn({
@@ -178,7 +182,13 @@ export async function submitAnswer(sessionId: string, userId: string, answer: st
     keywords,
     asked: meta.asked,
     bank: meta.questions,
-    context: { targetRole: session.targetRole, skills: resumeData?.skills, role: session.targetRole },
+    context: {
+      targetRole: session.targetRole,
+      skills: resumeData?.skills,
+      role: session.targetRole,
+      previousAnswers,
+      lastAnswer: answer,
+    },
     questionIndex: meta.questionIndex,
     maxQuestions: MAX_QUESTIONS,
     followUpCount: meta.followUpCount,

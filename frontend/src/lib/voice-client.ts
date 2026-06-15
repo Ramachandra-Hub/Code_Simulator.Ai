@@ -62,6 +62,8 @@ export async function submitVoiceTranscript(input: {
     };
     voiceAnalysis: { summary: string; recommendations: string[] };
     tts: { audioBase64: string | null; source: string; useBrowserFallback: boolean } | null;
+    realism?: { interruptions: number; followUps: number; contextReferences: number; turnCount: number };
+    realismScore?: number;
   }>("/voice/transcript", {
     method: "POST",
     body: JSON.stringify(input),

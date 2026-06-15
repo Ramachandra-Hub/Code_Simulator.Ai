@@ -19,12 +19,12 @@ import { VOICE_INTERVIEW_TYPES } from "@/lib/interview-types";
 import { ROUTES } from "@/lib/routes";
 import { loadVoices } from "@/lib/natural-speech";
 
-const INTERVIEWER_NAMES: Record<string, { name: string; role: string }> = {
-  hr: { name: "Sarah Mitchell", role: "HR Interviewer" },
-  technical: { name: "David Chen", role: "Technical Lead" },
-  behavioral: { name: "Priya Nair", role: "Hiring Manager" },
-  system_design: { name: "James Okonkwo", role: "Principal Engineer" },
-};
+import { getInterviewerPersona, pickThinkingMessage } from "@/lib/interview-personas";
+import {
+  InterviewRealismTracker,
+  immersionThinkingDelay,
+  detectContextReference,
+} from "@/lib/interview-immersion";
 
 function entryId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -41,7 +41,7 @@ export function VoiceInterviewSession() {
   const resumeId = searchParams.get("resume") || undefined;
   const voiceProfile = (searchParams.get("voice") || "professional") as VoiceProfile;
 
-  const interviewer = INTERVIEWER_NAMES[type] || INTERVIEWER_NAMES.technical;
+  const persona = getInterviewerPersona(type);
 
   const [voiceSessionId, setVoiceSessionId] = useState<string | null>(null);
   const [interviewSessionId, setInterviewSessionId] = useState<string | null>(null);
@@ -54,6 +54,9 @@ export function VoiceInterviewSession() {
   const [liveSpeech, setLiveSpeech] = useState("");
   const [creating, setCreating] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [realismTracker] = useState(() => new InterviewRealismTracker());
+  const [realismScore, setRealismScore] = useState(0);
+  const [thinkingStatus, setThinkingStatus] = useState<string | undefined>();
 
   const validType = VOICE_INTERVIEW_TYPES.some((t) => t.id === type);
 
@@ -65,7 +68,8 @@ export function VoiceInterviewSession() {
     }
     try {
       setPhase("ai_speaking");
-      setStatusHint(`${interviewer.name} is asking the first question...`);
+      setStatusHint(`${persona.name} is joining the room...`);
+      await immersionThinkingDelay(800, 1800);
       const result = await startVoiceInterview({ type, resumeId, voiceProfile });
       setVoiceSessionId(result.voiceSessionId);
       setInterviewSessionId(result.interviewSessionId);
@@ -77,9 +81,14 @@ export function VoiceInterviewSession() {
           role: "ai",
           kind: "question",
           text: result.firstQuestion,
+          speaker: persona.name,
           timestamp: new Date().toISOString(),
         },
       ]);
+      realismTracker.recordQuestion(result.firstQuestion);
+      setRealismScore(realismTracker.getScore());
+      setStatusHint(`${persona.name} is asking the first question...`);
+      await immersionThinkingDelay();
       await speakInterviewText(result.firstQuestion, result.tts, voiceProfile);
       setPhase("your_turn");
       setStatusHint("Your turn — answer the question, then submit.");
@@ -89,7 +98,7 @@ export function VoiceInterviewSession() {
     } finally {
       setCreating(false);
     }
-  }, [type, resumeId, voiceProfile, validType, interviewer.name]);
+  }, [type, resumeId, voiceProfile, validType, persona.name, realismTracker]);
 
   useEffect(() => {
     void loadVoices();
@@ -119,8 +128,11 @@ export function VoiceInterviewSession() {
     }
 
     setPhase("processing");
-    setStatusHint("Interviewer is reviewing your answer...");
+    setThinkingStatus(pickThinkingMessage());
+    setStatusHint(`${persona.name} is reviewing your answer...`);
     setLiveSpeech("");
+
+    await immersionThinkingDelay();
 
     try {
       const result = await submitVoiceTranscript({
@@ -140,6 +152,9 @@ export function VoiceInterviewSession() {
       ]);
       setProgress(result.progress);
       setSpokenAnswer("");
+      realismTracker.recordTurn();
+      if (result.realism) realismTracker.merge(result.realism);
+      if (result.progress?.followUpCount > 0) realismTracker.recordFollowUp();
 
       if (result.phase === "complete") {
         setPhase("completing");
@@ -148,8 +163,16 @@ export function VoiceInterviewSession() {
       }
 
       if (result.nextQuestion) {
+        if (detectContextReference(result.nextQuestion)) {
+          realismTracker.recordQuestion(result.nextQuestion);
+        }
+        if (result.progress?.followUpCount > 0) realismTracker.recordFollowUp();
+        setRealismScore(realismTracker.getScore());
+
         setPhase("ai_speaking");
-        setStatusHint(`${interviewer.name} is asking the next question...`);
+        setThinkingStatus(undefined);
+        setStatusHint(`${persona.name} is preparing the next question...`);
+        await immersionThinkingDelay(1000, 2500);
         setCurrentQuestion(result.nextQuestion);
         setTranscript((prev) => [
           ...prev,
@@ -158,6 +181,7 @@ export function VoiceInterviewSession() {
             role: "ai",
             kind: "question",
             text: result.nextQuestion!,
+            speaker: persona.name,
             timestamp: new Date().toISOString(),
           },
         ]);
@@ -198,16 +222,26 @@ export function VoiceInterviewSession() {
     phase === "ai_speaking" ? "ai_speaking" : phase === "your_turn" ? "your_turn" : phase === "processing" ? "processing" : "complete";
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
+    <div className="p-6 max-w-6xl mx-auto space-y-6">
       <AIMeetingRoom
         title={`${type.replace(/_/g, " ")} Interview`}
         participants={[
-          { id: "interviewer", name: interviewer.name, role: interviewer.role, isInterviewer: true },
+          {
+            id: "interviewer",
+            name: persona.name,
+            role: persona.role,
+            isInterviewer: true,
+            personality: persona.personality,
+            personalityLabel: persona.personalityLabel,
+            avatarInitials: persona.avatarInitials,
+          },
         ]}
-        activeSpeakerId="interviewer"
+        activeSpeakerId={phase === "your_turn" ? "candidate" : "interviewer"}
         phase={meetingPhase}
         currentQuestion={currentQuestion}
         statusHint={statusHint}
+        thinkingStatus={thinkingStatus}
+        realismScore={realismScore}
         progress={{ current: progress.questionIndex + 1, total: progress.maxQuestions }}
         spokenAnswer={spokenAnswer}
         liveSpeech={phase === "your_turn" ? liveSpeech : ""}
@@ -215,9 +249,10 @@ export function VoiceInterviewSession() {
         onSpeechError={(msg) => toast({ title: "Voice input", description: msg, variant: "error" })}
         onSubmit={() => void submitAnswer()}
         submitDisabled={phase !== "your_turn" || displayAnswer.trim().length < 10}
+        transcriptPanel={
+          <TranscriptPanel entries={transcript} liveSpeech={phase === "your_turn" ? liveSpeech : ""} />
+        }
       />
-
-      <TranscriptPanel entries={transcript} liveSpeech={phase === "your_turn" ? liveSpeech : ""} />
 
       <div className="flex justify-end">
         <Button

@@ -8,6 +8,7 @@ import {
 import { evaluatePanelistTurn } from "../evaluators/panel-evaluation-evaluator";
 import { normalizePanelQuestion } from "@/lib/speech-sanitize";
 import { MNC_PANEL_ROSTER, MODERATOR_NAME, type PanelPersonaConfig } from "../panel/panel-personas";
+import { extractEarlierAnswerSnippet } from "../services/interview-realism";
 
 export interface PanelTurnResult {
   decision: ModeratorDecision;
@@ -25,6 +26,7 @@ export async function generatePanelQuestion(opts: {
   answer: string;
   recentTranscript: string;
   interrupted: boolean;
+  earlierSnippet?: string | null;
   skills?: string[];
   userId: string;
   sessionId: string;
@@ -36,6 +38,7 @@ export async function generatePanelQuestion(opts: {
     answer: opts.answer,
     recentTranscript: opts.recentTranscript,
     interrupted: opts.interrupted,
+    earlierSnippet: opts.earlierSnippet,
   });
 
   try {
@@ -86,8 +89,8 @@ export async function generatePanelQuestion(opts: {
       ? "Let me stop you there — "
       : opts.action === "challenge"
         ? "I'd like to push back on that — "
-        : opts.action === "cross_question"
-          ? "Earlier you mentioned something related — "
+        : opts.action === "cross_question" && opts.earlierSnippet
+          ? `Earlier you mentioned ${opts.earlierSnippet.replace(/\.$/, "")} — can you walk me through your specific contribution?`
           : "";
 
   return normalizePanelQuestion(prefix + pool[Math.floor(Math.random() * pool.length)]);
@@ -141,6 +144,11 @@ export async function runPanelTurnGraph(opts: {
     .map((t) => `${t.speaker}: ${t.text}`)
     .join("\n");
 
+  const earlierSnippet =
+    decision.action === "cross_question" || decision.action === "follow_up"
+      ? extractEarlierAnswerSnippet(opts.recentTranscript)
+      : null;
+
   const question = await generatePanelQuestion({
     persona: personaConfig,
     action: decision.action,
@@ -148,6 +156,7 @@ export async function runPanelTurnGraph(opts: {
     answer: opts.answer,
     recentTranscript: transcriptText,
     interrupted: decision.interrupted,
+    earlierSnippet,
     skills: opts.skills,
     userId: opts.userId,
     sessionId: opts.sessionId,
